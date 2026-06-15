@@ -1,0 +1,3412 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>นักสู้วิทย์ - การเปลี่ยนแปลงของสสาร</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Kanit:wght@400;500;600;700;800&family=Mali:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+ *  Custom fonts
+ * ========================================================== */
+@font-face{
+  font-family:"THSarabunNewBold";
+  src: url("image/THSarabunNewBold.ttf") format("truetype"),
+       url("image/THSarabunNewBold.woff2") format("woff2"),
+       url("image/THSarabunNewBold.woff") format("woff");
+  font-weight:700;
+  font-style:normal;
+  font-display:swap;
+}
+
+/* ============================================================
+ *  Design tokens — คงเดิมจาก game1 ตัวเก่า ห้ามแตะสี/ธีม
+ * ========================================================== */
+:root{
+  --bg-sky-1:#cfe9e3;
+  --bg-sky-2:#f5e7c8;
+  --bg-grass:#a7d49b;
+  --bg-grass-2:#86c47c;
+  --ink:#2b2118;
+  --ink-soft:#5b4a3b;
+  --paper:#eaf2fb;
+  --paper-edge:#bcd8f1;
+  --accent:#e26a4f;
+  --accent-2:#f3b13f;
+  --accent-3:#5aa6c4;
+  --accent-4:#7bb274;
+  --good:#3aa564;
+  --bad:#d8553f;
+  --shadow:0 12px 24px -12px rgba(43,33,24,.35), 0 2px 0 rgba(43,33,24,.06);
+  --shadow-lg:0 30px 60px -30px rgba(43,33,24,.45), 0 6px 0 rgba(43,33,24,.06);
+  --radius-card:22px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+html,body{height:100dvh}
+body{
+  font-family:"Kanit","Noto Sans Thai",system-ui,sans-serif;
+  color:var(--ink);
+  background:radial-gradient(120% 80% at 50% 0%, var(--bg-sky-1) 0%, var(--bg-sky-2) 60%, #f9e5b8 100%);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:none;
+}
+
+/* ============================================================
+ *  Camera layer (อยู่ใต้สุด — z 0/1) — ใช้เมื่อเปิดกล้อง
+ * ========================================================== */
+#cameraMirror{
+  position:fixed; inset:0;
+  width:100vw; width:100dvw;
+  height:100vh; height:100dvh;
+  object-fit:cover;
+  transform:scaleX(-1);
+  z-index:0;
+  display:none;
+  background:#000;
+  pointer-events:none;
+}
+#camCanvas{
+  position:fixed; inset:0;
+  width:100vw; width:100dvw;
+  height:100vh; height:100dvh;
+  z-index:1;
+  pointer-events:none;
+  display:none;
+}
+/* คันธนูในโหมดกล้อง — วาด SVG เกาะมือเล็ง */
+#camBow{
+  position:fixed;
+  left:0; top:0;
+  width:160px; height:160px;
+  pointer-events:none;
+  z-index:4;
+  display:none;
+  overflow:visible;
+  /* transform จะถูกเซ็ตด้วย JS — anchor ที่กึ่งกลาง = ตำแหน่งมือ */
+  transform-origin:50% 50%;
+  transition:opacity .15s ease;
+}
+#camBow.show{ display:block; }
+#camBow.hidden-bow{ opacity:0; }
+/* ภาพธนู (bow1/bow2.png) — เต็มกล่อง grip อยู่กึ่งกลาง */
+#camBow .bow-frame{
+  position:absolute; left:0; top:0;
+  width:100%; height:100%;
+  object-fit:contain;
+  user-select:none;
+  -webkit-user-drag:none;
+  pointer-events:none;
+}
+/* ลูกธนู SVG ทับบนภาพธนู — viewBox -100..100 จุด (0,0) = กึ่งกลาง = grip */
+#camBow .cam-bow-arrow{
+  position:absolute; left:0; top:0;
+  width:100%; height:100%;
+  overflow:visible;
+  pointer-events:none;
+  transition:opacity .15s ease;
+}
+/* ตอนยิง: ซ่อนลูกธนูที่อยู่บนคันธนู (ลูกธนูจริงจะถูก append ไปยังจอแยกต่างหาก) */
+#camBow.firing .cam-bow-arrow{ opacity:0; }
+
+/* Warning เมื่อผู้เล่นข้ามเส้นแบ่งโซน */
+#zoneWarning{
+  position:fixed;
+  left:50%; top:50%;
+  transform:translate(-50%, -50%);
+  z-index:58;
+  background:rgba(214,90,60,.92);
+  color:#fff;
+  border-radius:18px;
+  padding:18px 26px;
+  display:none;
+  text-align:center;
+  pointer-events:none;
+  box-shadow:0 14px 30px -10px rgba(0,0,0,.6);
+  animation:zwPulse 1.8s ease-in-out infinite;
+}
+#zoneWarning.show{ display:block; }
+#zoneWarning .zwIcon{ font-size:36px; line-height:1; margin-bottom:6px; }
+#zoneWarning .zwText{
+  font-family:"Kanit",sans-serif;
+  font-weight:700; font-size:18px; letter-spacing:.02em;
+}
+@keyframes zwPulse{
+  0%,100%{ box-shadow:0 14px 30px -10px rgba(0,0,0,.6), 0 0 0 0 rgba(214,90,60,.5); }
+  50%   { box-shadow:0 14px 30px -10px rgba(0,0,0,.6), 0 0 0 18px rgba(214,90,60,0); }
+}
+/* ฟิลเตอร์สีแดงเต็มจอเมื่อเข้าใกล้เป้า — กล่องคำเตือนอยู่หน้า */
+body.zone-warn::after{
+  content:"";
+  position:fixed; inset:0;
+  background:radial-gradient(120% 80% at 50% 50%, rgba(214,40,30,.35), rgba(180,20,10,.55));
+  pointer-events:none;
+  z-index:57;          /* ต่ำกว่า #zoneWarning (58) → คำเตือนยังโผล่ */
+  animation:zoneFlash 1s ease-in-out infinite;
+}
+@keyframes zoneFlash{
+  0%,100% { opacity:0.55; }
+  50%     { opacity:0.85; }
+}
+/* หลังจบเกม — ซ่อนทุก element ของเกมบนจอ (สรุปคะแนนยังเห็น overlay ทับ) */
+body.game-ended .hud,
+body.game-ended .archer,
+body.game-ended .targets,
+body.game-ended .question,
+body.game-ended #camBow,
+body.game-ended #cdRing,
+body.game-ended .cooldown,
+body.game-ended .footer-hint,
+body.game-ended #zoneWarning,
+body.game-ended .boxer,
+body.game-ended .sandbag-wrap,
+body.game-ended .sign-wrap,
+body.pre-game .boxer,
+body.pre-game .sandbag-wrap,
+body.pre-game .sign-wrap{
+  display:none !important;
+}
+/* canvas ก็เคลียร์ — ไม่แสดงเส้นเล็ง */
+body.game-ended #aimCanvas{ visibility:hidden; }
+
+body.cam-on{ background:transparent; }
+/* โหมดกล้อง = ภาพคนจริงเต็มจอ: ซ่อนนักธนูการ์ตูน + ฉากหลัง + พื้นหลังเกมที่ #app */
+body.cam-on #app{
+  background-image:none !important;
+  background:transparent !important;
+}
+body.cam-on .scene-bg{ display:none; }
+body.cam-on .archer{ display:none; }
+body.cam-on .boxer{ display:none; }
+/* เป้ายังอยู่ ให้ลอยอยู่บนภาพกล้อง */
+body.cam-on .target .label{background:transparent;}
+/* HUD/ปุ่ม/banner — เพิ่มเงาให้อ่านง่ายบนพื้นกล้อง */
+body.cam-on .hud .pill,
+body.cam-on .question,
+body.cam-on .iconbtn,
+body.cam-on .footer-hint{
+  box-shadow:0 6px 18px -6px rgba(0,0,0,.55), 0 2px 0 rgba(0,0,0,.2);
+}
+/* กันคลิกทะลุ overlay ที่ยังไม่ show */
+.overlay:not(.show){ pointer-events:none; }
+
+/* ============================================================
+ *  App shell
+ * ========================================================== */
+#app{
+  position:fixed; inset:0;
+  display:flex; flex-direction:column;
+  padding-top:var(--safe-top);
+  padding-bottom:var(--safe-bot);
+  padding-left:var(--safe-left);
+  padding-right:var(--safe-right);
+  z-index:5;
+}
+
+/* Decorative scene background */
+.scene-bg{ position:absolute; inset:0; pointer-events:none; z-index:0; transition:opacity .3s ease; }
+.scene-bg .sun{
+  position:absolute; top:6%; left:50%;
+  width:140px; height:140px; border-radius:50%;
+  transform:translateX(-50%);
+  background:radial-gradient(circle at 50% 50%, #ffe39a 0%, #ffd06a 60%, rgba(255,208,106,0) 70%);
+  filter:blur(2px); opacity:.9;
+}
+.scene-bg .cloud{
+  position:absolute; height:34px; border-radius:30px;
+  background:#fff; opacity:.85;
+  box-shadow:inset 0 -6px 0 rgba(43,33,24,.04);
+}
+.scene-bg .cloud::before,
+.scene-bg .cloud::after{ content:""; position:absolute; background:inherit; border-radius:50%; }
+.scene-bg .cloud::before{ width:30px; height:30px; left:14px; top:-12px; }
+.scene-bg .cloud::after{ width:42px; height:42px; right:18px; top:-18px; }
+.scene-bg .ground{
+  position:absolute; left:0; right:0; bottom:0;
+  height:32%;
+  background:linear-gradient(to bottom, var(--bg-grass) 0%, var(--bg-grass-2) 100%);
+  border-top:3px dashed rgba(255,255,255,.45);
+}
+.scene-bg .ground::before{
+  content:""; position:absolute; left:0; right:0; top:-12px; height:18px;
+  background-image:
+    radial-gradient(circle at 4% 100%, var(--bg-grass-2) 8px, transparent 9px),
+    radial-gradient(circle at 13% 100%, var(--bg-grass-2) 6px, transparent 7px),
+    radial-gradient(circle at 22% 100%, var(--bg-grass-2) 9px, transparent 10px),
+    radial-gradient(circle at 33% 100%, var(--bg-grass-2) 7px, transparent 8px),
+    radial-gradient(circle at 44% 100%, var(--bg-grass-2) 8px, transparent 9px),
+    radial-gradient(circle at 56% 100%, var(--bg-grass-2) 6px, transparent 7px),
+    radial-gradient(circle at 67% 100%, var(--bg-grass-2) 10px, transparent 11px),
+    radial-gradient(circle at 78% 100%, var(--bg-grass-2) 7px, transparent 8px),
+    radial-gradient(circle at 88% 100%, var(--bg-grass-2) 8px, transparent 9px),
+    radial-gradient(circle at 96% 100%, var(--bg-grass-2) 6px, transparent 7px);
+}
+
+/* ============================================================
+ *  HUD
+ * ========================================================== */
+.hud{
+  position:relative; z-index:5;
+  display:flex; align-items:center; gap:clamp(6px, 1.4vw, 14px);
+  padding:clamp(8px, 1.6vw, 16px) clamp(10px, 2vw, 22px);
+  flex-wrap:nowrap;
+  min-height:0;
+}
+.hud .pill{
+  display:inline-flex; align-items:center; gap:clamp(8px, 1.2vw, 12px);
+  background:var(--paper);
+  border:2px solid var(--paper-edge);
+  border-radius:999px;
+  padding:clamp(8px, 1.2vw, 12px) clamp(14px, 2vw, 20px);
+  box-shadow:var(--shadow);
+  font-weight:700;
+  color:var(--ink);
+  white-space:nowrap;
+}
+.hud .pill .ico{
+  width:clamp(28px, 3.4vw, 36px); height:clamp(28px, 3.4vw, 36px);
+  display:inline-grid; place-items:center;
+  border-radius:50%;
+  font-size:clamp(16px, 2vw, 22px);
+}
+.hud .pill.score .ico{ background:#d6e8fb; }
+.hud .pill.timer .ico{ background:#d6e8fb; }
+.hud .pill.streak .ico{ background:#ffd2d0; }
+.hud .pill.hurt{
+  animation:hurtPulse .5s ease;
+}
+@keyframes hurtPulse{
+  0%   { transform:scale(1); background:var(--paper); }
+  20%  { transform:scale(1.18); background:#ffd2d0; border-color:var(--bad); }
+  60%  { transform:scale(.96); background:#ffe2e0; }
+  100% { transform:scale(1); background:var(--paper); }
+}
+.hud .spacer{ flex:1; min-width:0; }
+.hud .value{
+  font-weight:800;
+  font-size:clamp(22px, 2.8vw, 30px);    /* ใหญ่ขึ้นจาก 15-20 → 22-30 */
+  line-height:1;
+}
+
+.iconbtn{
+  appearance:none; border:2px solid var(--paper-edge);
+  background:var(--paper); color:var(--ink);
+  width:clamp(38px, 4.4vw, 44px); height:clamp(38px, 4.4vw, 44px);
+  border-radius:14px;
+  display:inline-grid; place-items:center;
+  cursor:pointer; box-shadow:var(--shadow);
+  transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+  flex-shrink:0;
+}
+.iconbtn:hover{ transform:translateY(-1px); }
+.iconbtn:active{ transform:translateY(1px); box-shadow:0 4px 10px -6px rgba(43,33,24,.4); }
+.iconbtn.on{ background:#e7f1fd; border-color:#2f7ed4; color:#2f7ed4; }
+
+/* ============================================================
+ *  Question bubble — ลอยอยู่บนหัวนักธนู (โหมดปกติ) / บนหัวคน (โหมดกล้อง)
+ * ========================================================== */
+.question{
+  position:fixed;
+  left:50%; top:140px;
+  transform:translate(-50%, -100%);
+  z-index:6;
+  background:var(--paper);
+  border:2px solid var(--paper-edge);
+  border-radius:20px;
+  /* padding-bottom มากขึ้นอีก เผื่อหางตัวอักษรไทย */
+  padding:clamp(9.6px, 1.44vh, 14.4px) clamp(16px, 2.6vw, 24px) clamp(22px, 3.2vh, 32px);
+  box-shadow:0 12px 28px -12px rgba(43,33,24,.45), 0 4px 0 rgba(43,33,24,.06);
+  pointer-events:none;
+  white-space:nowrap;
+  transition:opacity .25s ease;
+  will-change:transform, left, top;
+  /* ความกว้างขั้นต่ำ ≥ ความสูงประมาณการ (font 42-78 + line-height 1.15 + padding) */
+  min-width:clamp(80px, 12vw, 130px);
+  aspect-ratio:auto;
+  box-sizing:border-box;
+}
+/* หางลูกโป่งคำพูด (แง่งชี้ลง) ถูกตัดออก — เหลือเฉพาะกล่องสี่เหลี่ยมมุมมน */
+.question::after{ display:none; }
+.question .qword{
+  font-family:"THSarabunNewBold","Fraunces","Kanit",serif;
+  font-weight:700;
+  font-size:clamp(42px, 7.5vw, 78px);
+  line-height:1.15;                              /* เพิ่มจาก 1 → 1.15 เผื่อหางตัวอักษรไทย */
+  color:var(--ink); letter-spacing:-.01em;
+  text-align:center;
+}
+.question.hidden{ opacity:0; }
+
+/* ============================================================
+ *  Play field
+ * ========================================================== */
+.field{
+  position:relative; z-index:2;
+  flex:1; min-height:0;
+  overflow:hidden;
+}
+
+/* Archer */
+.archer{
+  position:absolute;
+  left:clamp(20px, 7vw, 110px);
+  top:50%;
+  transform:translateY(-50%);
+  width:clamp(140px, 16vw, 220px);
+  height:clamp(190px, 22vw, 300px);
+  z-index:3;
+  pointer-events:none;
+}
+.archer svg{ width:100%; height:100%; overflow:visible; }
+.archer .bow{ transform-origin:173px 132px; transition:transform .15s ease; }
+.archer .arrow-nocked{ transition:transform .08s ease, opacity .15s ease; }
+
+/* Targets column */
+.targets{
+  position:absolute;
+  right:clamp(12px, 5vw, 100px);
+  top:0; bottom:0;
+  width:clamp(140px, 21vw, 258px);              /* -10% จาก 156/23/286 */
+  display:flex; flex-direction:column;
+  justify-content:space-around; align-items:center;
+  padding:clamp(36px, 5vh, 48px) 0 clamp(36px, 5vh, 48px);
+  gap:clamp(6px, 1.2vh, 14px);
+  z-index:2;
+}
+.target{
+  position:relative;
+  /* -10% จาก 125/21/220 และ 25vh */
+  width:min(clamp(112px, 19vw, 198px), 22.5vh);
+  aspect-ratio:1/1;
+  border-radius:50%;
+  display:flex; flex-direction:column; align-items:center;
+  cursor:default;
+  animation:bob 3.2s ease-in-out infinite;
+  transition:transform .2s ease;
+  will-change:transform;
+  flex-shrink:0;
+}
+.target:nth-child(2){ animation-delay:-1.1s; }
+.target:nth-child(3){ animation-delay:-2.2s; }
+@keyframes bob{
+  0%,100%{ transform:translateY(0) rotate(-1.5deg); }
+  50%   { transform:translateY(-8px) rotate(1.5deg); }
+}
+.target .rings{
+  position:absolute; inset:0; border-radius:50%;
+  z-index:1;
+  background:radial-gradient(circle at 50% 50%,
+    #fff 0 42%,
+    var(--accent) 42% 70%,
+    #fff 70% 100%);
+  box-shadow:
+    0 12px 0 -4px rgba(43,33,24,.18),
+    0 18px 32px -14px rgba(43,33,24,.45),
+    inset 0 0 0 3px #fff,
+    inset 0 0 0 4px rgba(43,33,24,.12);
+}
+/* label อยู่กลางเป้า — ไม่มีกรอบ ไม่มีพื้น (ตัวอักษรลอยอย่างเดียว) */
+.target .label{
+  position:absolute; z-index:3;
+  left:50%; top:50%;
+  transform:translate(-50%, -50%);
+  background:transparent;
+  border:none;
+  padding:0;
+  font-family:"Fraunces","Kanit",serif;
+  font-weight:800;
+  font-size:clamp(26px, 2.9vw, 41px);        /* +10% จาก 24/2.64/37 */
+  color:var(--ink);
+  text-shadow:
+    0 2px 0 #fff,
+    0 -2px 0 #fff,
+    2px 0 0 #fff,
+    -2px 0 0 #fff,
+    2px 2px 0 #fff,
+    -2px 2px 0 #fff,
+    2px -2px 0 #fff,
+    -2px -2px 0 #fff,
+    0 4px 8px rgba(43,33,24,.45);
+  white-space:nowrap;
+  pointer-events:none;
+  letter-spacing:.01em;
+}
+/* ขาตั้งสามขาเฉียง — ห่างกันขึ้น (มุม ±22°) */
+.target::before,
+.target::after{
+  content:"";
+  position:absolute;
+  left:50%; bottom:-30%;
+  width:8px; height:46%;
+  background:linear-gradient(to bottom, #8a6a4a, #5e4731);
+  border-radius:4px;
+  z-index:0;
+  transform-origin:top center;
+  box-shadow:inset -2px 0 0 rgba(0,0,0,.18);
+}
+.target::before{
+  transform:translateX(-50%) rotate(-22deg);
+}
+.target::after{
+  transform:translateX(-50%) rotate(22deg);
+}
+.target.correct-flash .rings{
+  animation:correctPop .6s ease;
+  box-shadow:
+    0 0 0 8px rgba(58,165,100,.25),
+    0 18px 32px -14px rgba(43,33,24,.45),
+    inset 0 0 0 4px #fff;
+}
+.target.wrong-flash .rings{ animation:wrongShake .5s ease; }
+@keyframes correctPop{
+  0%{ transform:scale(1); } 40%{ transform:scale(1.15); } 100%{ transform:scale(1); }
+}
+@keyframes wrongShake{
+  0%,100%{ transform:translateX(0) rotate(0); }
+  20%{ transform:translateX(-8px) rotate(-3deg); }
+  40%{ transform:translateX(8px) rotate(3deg); }
+  60%{ transform:translateX(-6px) rotate(-2deg); }
+  80%{ transform:translateX(6px) rotate(2deg); }
+}
+
+/* Aim guide */
+#aimCanvas{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  pointer-events:none;
+  z-index:2;
+}
+
+/* Arrows in-flight */
+.arrow{
+  position:absolute;
+  width:90px; height:14px;
+  transform-origin:4px 50%;
+  pointer-events:none;
+  z-index:4;
+}
+.arrow.big{
+  width:160px; height:22px;        /* โหมดกล้อง — ใหญ่ขึ้นเพื่อให้สังเกตเห็นบนภาพคนจริง */
+  transform-origin:8px 50%;
+  filter:drop-shadow(0 4px 8px rgba(0,0,0,.45));
+}
+.arrow svg{ width:100%; height:100%; display:block; overflow:visible; }
+
+/* Floating texts */
+.floater{
+  position:absolute;
+  pointer-events:none;
+  font-family:"Fraunces","Kanit",serif;
+  font-weight:800;
+  font-size:clamp(28px, 4.4vw, 42px);
+  letter-spacing:-.02em;
+  text-shadow:0 4px 0 rgba(43,33,24,.15);
+  animation:floatUp 1.1s ease forwards;
+  z-index:6;
+}
+.floater.good{ color:var(--good); }
+.floater.bad{ color:var(--bad); }
+@keyframes floatUp{
+  0%{ transform:translate(-50%, 0) scale(.6); opacity:0; }
+  20%{ transform:translate(-50%,-10px) scale(1.1); opacity:1; }
+  100%{ transform:translate(-50%,-80px) scale(1); opacity:0; }
+}
+.spark{
+  position:absolute;
+  width:14px; height:14px;
+  background:var(--accent-2);
+  border-radius:3px;
+  pointer-events:none;
+  animation:sparkOut .8s ease forwards;
+  z-index:6;
+}
+@keyframes sparkOut{
+  0%{ transform:translate(0,0) scale(1) rotate(0); opacity:1; }
+  100%{ transform:translate(var(--dx),var(--dy)) scale(.2) rotate(360deg); opacity:0; }
+}
+
+/* Footer hint */
+.footer-hint{
+  position:absolute;
+  left:50%; bottom:calc(30px + var(--safe-bot));
+  transform:translateX(-50%);
+  z-index:3;
+  background:rgba(253,246,231,.85);
+  backdrop-filter:blur(4px);
+  border:2px dashed var(--paper-edge);
+  border-radius:999px;
+  padding:8px 18px;
+  font-size:clamp(12px, 1.3vw, 14px); color:var(--ink-soft); font-weight:500;
+  pointer-events:none;
+  opacity:0; transition:opacity .25s ease;
+  text-align:center;
+  max-width:92vw;
+}
+.footer-hint.show{ opacity:1; }
+
+/* Cooldown ring — แสดงเฉพาะตอนยิงเสร็จและกำลังเตรียมยิงครั้งต่อไป */
+.cooldown{
+  display:none !important;       /* ซ่อนวงรีโหลดการยิงในโหมดปกติ */
+  position:absolute;
+  width:64px; height:64px;
+  pointer-events:none;
+  z-index:4;
+  transform:translate(-50%,-50%);
+  opacity:0;
+  transition:opacity .2s ease;
+}
+.cooldown.show{ opacity:1; }
+.cooldown svg{ transform:rotate(-90deg); }
+.cooldown circle.bg{ fill:none; stroke:rgba(43,33,24,.12); stroke-width:5; }
+.cooldown circle.fg{ fill:none; stroke:var(--accent); stroke-width:5; stroke-linecap:round; }
+
+/* ============================================================
+ *  Overlays / Modals
+ * ========================================================== */
+.overlay{
+  position:fixed; inset:0;
+  background:radial-gradient(120% 80% at 50% 0%, rgba(207,233,227,.85), rgba(245,231,200,.92) 60%, rgba(249,229,184,.95));
+  backdrop-filter:blur(6px);
+  display:none; align-items:center; justify-content:center;
+  padding:max(16px, var(--safe-top)) 16px max(16px, var(--safe-bot));
+  overflow:hidden;
+}
+.overlay.show{ display:flex; }
+
+/* splash + menu: พื้นหลัง bg.png ล้วนๆ ไม่ทับด้วย gradient หรือ blur */
+#splashOverlay,
+#menuOverlay{
+  backdrop-filter:none;
+}
+
+/* menuOverlay — ใช้พื้นหลัง bg.png ตรงๆ ไม่มี filter ทับ */
+#menuOverlay{
+  background:url("image/bg.png") center/cover no-repeat;
+}
+
+#splashOverlay{ z-index:48; }
+#menuOverlay{ z-index:50; }
+#pauseOverlay{ z-index:55; }
+#endOverlay{
+  z-index:55;
+  background:rgba(255,255,255,.10);     /* ใส โปร่งแสง ไม่มีสีทับ */
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+}
+#preloadOverlay{ z-index:60; background:rgba(245,231,200,.96); }
+#guideOverlay{ z-index:65; }
+#countdownOverlay{
+  z-index:70;
+  /* ฟิลเตอร์โปร่งแสงสีดำเข้ม + blur แรง บังเกมด้านหลังให้มัวมาก */
+  background:rgba(20,15,10,.55);
+  backdrop-filter:blur(20px) saturate(0.7);
+  -webkit-backdrop-filter:blur(20px) saturate(0.7);
+}
+
+/* ============================================================
+ *  Guide overlay (หน้าวิธีเล่นโหมดกล้อง — โชว์ก่อนนับถอยหลัง)
+ * ========================================================== */
+#guideOverlay{
+  /* ฟิลเตอร์โปร่งแสงเบลอแรง — เห็น bg ของด่านมัวๆ ทางด้านหลัง */
+  background:rgba(20,15,10,.55);
+  backdrop-filter:blur(20px) saturate(0.7);
+  -webkit-backdrop-filter:blur(20px) saturate(0.7);
+  align-items:center; justify-content:center;
+  padding:max(12px, var(--safe-top)) 12px max(12px, var(--safe-bot));
+}
+#guideOverlay .guide-wrap{
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:clamp(12px, 2.4vh, 24px);
+  width:min(96vw, 960px);
+  max-height:calc(100dvh - max(24px, calc(var(--safe-top) + var(--safe-bot))));
+}
+#guideOverlay .guide-title{
+  font-family:"Fraunces","Kanit",serif;
+  font-weight:800;
+  font-size:clamp(20px, 3.4vw, 36px);
+  color:var(--ink);
+  margin:0;
+  text-align:center;
+  text-shadow:0 2px 0 #fff, 0 4px 18px rgba(43,33,24,.18);
+  letter-spacing:-.01em;
+}
+#guideOverlay .guide-img{
+  width:min(86vw, 720px);
+  max-height:55dvh;
+  height:auto;
+  object-fit:contain;
+  filter:drop-shadow(0 14px 24px rgba(43,33,24,.25));
+  animation:guidePop .5s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes guidePop{
+  0%   { transform:translateY(15px) scale(.92); opacity:0; }
+  100% { transform:translateY(0) scale(1); opacity:1; }
+}
+#guideOverlay .guide-actions{
+  display:flex; gap:clamp(10px, 1.6vw, 18px);
+  flex-wrap:wrap; justify-content:center;
+}
+#guideOverlay .btn{
+  font-size:clamp(16px, 2vw, 22px);
+  padding:clamp(12px, 1.6vh, 16px) clamp(24px, 3.5vw, 36px);
+  border-radius:999px;
+}
+/* ปุ่มกล้องแบบไอคอนล้วน (ทรงกลม) */
+#guideOverlay .btn-cam-icon{
+  padding:0;
+  width:clamp(52px, 6vw, 64px);
+  height:clamp(52px, 6vw, 64px);
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:50%;
+}
+#guideOverlay .btn-cam-icon svg{
+  width:clamp(24px, 3vw, 30px);
+  height:clamp(24px, 3vw, 30px);
+}
+/* ปุ่มกล้องเมื่อเปิดอยู่ — เปลี่ยนสี indicator */
+#guideOverlay .btn.cam-on{
+  background:linear-gradient(180deg, #7bb274 0%, #5a8c54 100%);
+  color:#fff;
+  box-shadow:0 6px 0 #3f6b3a, 0 14px 24px -10px rgba(43,33,24,.4);
+}
+#guideOverlay .btn.cam-on:active{
+  box-shadow:0 3px 0 #3f6b3a, 0 8px 14px -10px rgba(43,33,24,.4);
+}
+
+/* จอเตี้ย → ลด image */
+@media (max-height:520px){
+  #guideOverlay .guide-img{ max-height:42dvh; }
+  #guideOverlay .guide-title{ font-size:clamp(16px, 2.6vw, 24px); }
+  #guideOverlay .btn{ font-size:14px; padding:10px 22px; }
+}
+
+/* ============================================================
+ *  Splash (หน้าแรกสุดเมื่อเปิดเกม) — banner + ปุ่มเข้าสู่เกม
+ *  ใช้พื้นหลัง bg.png — ไม่เลื่อน — สเกลตามจอจริง
+ * ========================================================== */
+#splashOverlay{
+  background:url("image/bg.png") center/cover no-repeat;
+  align-items:center; justify-content:center;
+  overflow:hidden;
+  padding:max(12px, var(--safe-top)) 12px max(12px, var(--safe-bot));
+}
+/* ────────────────────────────────────────────────────────────
+ * Splash loading filter — เบลอทั้งหน้าก่อนรูป (bg.png + banner.png) โหลดเสร็จ
+ *   .loading: blur ทุกอย่างใน splash + พื้นหลังสีเรียบเพื่อกันเห็นช่องว่างเปล่า
+ *   พอถอด .loading ออก: blur fade ออกในเวลา ~600ms
+ * ──────────────────────────────────────────────────────────── */
+#splashOverlay.loading{
+  background:var(--bg-sky-2);    /* สีพื้นเรียบๆ ก่อน bg.png มา ไม่ให้เห็นจอเปล่าๆ */
+}
+#splashOverlay.loading::before{
+  content:"";
+  position:absolute; inset:0;
+  background:url("image/bg.png") center/cover no-repeat;
+  filter:blur(28px) saturate(0.85);
+  transform:scale(1.1);          /* ขยายนิดเพื่อกันขอบเบลอ */
+  opacity:0;                     /* เริ่มที่ 0 — เด่นขึ้นเมื่อ bg โหลดเสร็จ */
+  transition:opacity .5s ease;
+  pointer-events:none;
+  z-index:0;
+}
+#splashOverlay.loading.bg-ready::before{ opacity:1; }
+#splashOverlay .splash-wrap{ position:relative; z-index:1; }
+/* ตอน loading: ซ่อน splash-wrap (banner + ปุ่ม) เพื่อรอภาพโหลด */
+#splashOverlay.loading .splash-wrap{
+  opacity:0;
+  filter:blur(12px);
+  transition:opacity .6s ease, filter .6s ease;
+}
+/* เมื่อไม่ loading แล้ว: fade เข้า */
+#splashOverlay:not(.loading) .splash-wrap{
+  opacity:1;
+  filter:blur(0);
+  transition:opacity .6s ease, filter .6s ease;
+}
+
+#splashOverlay .splash-wrap{
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:clamp(16px, 3.5vh, 36px);
+  width:min(96vw, 1100px);
+  max-height:calc(100dvh - max(24px, calc(var(--safe-top) + var(--safe-bot))));
+}
+#splashOverlay .splash-banner{
+  width:min(100vw, 1476px);          /* 1.5x จาก 984px */
+  max-height:108dvh;                 /* 1.5x จาก 72dvh — ปล่อยให้เกินจอเล็กน้อยได้ */
+  height:auto;
+  object-fit:contain;
+  filter:drop-shadow(0 18px 30px rgba(43,33,24,.3));
+  animation:splashPop .6s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes splashPop{
+  0%   { transform:translateY(20px) scale(.88); opacity:0; }
+  100% { transform:translateY(0) scale(1); opacity:1; }
+}
+#splashOverlay .splash-enter{
+  appearance:none; border:none; cursor:pointer;
+  font-family:"Kanit","Noto Sans Thai",sans-serif;
+  font-weight:800;
+  font-size:clamp(18px, 2.6vw, 30px);
+  padding:clamp(14px, 1.8vh, 20px) clamp(36px, 5vw, 64px);
+  border-radius:999px;
+  color:#fff;
+  background:linear-gradient(180deg, #e85547 0%, #d8362c 100%);
+  box-shadow:
+    0 8px 0 #a8261b,
+    0 18px 32px -10px rgba(43,33,24,.5),
+    inset 0 2px 0 rgba(255,255,255,.35);
+  letter-spacing:.04em;
+  transition:transform .12s ease, box-shadow .12s ease;
+  animation:splashBtnIn .8s .2s cubic-bezier(.34,1.56,.64,1) both, splashBtnPulse 2.4s 1.2s ease-in-out infinite;
+}
+#splashOverlay .splash-enter:hover{ transform:translateY(-2px); }
+#splashOverlay .splash-enter:active{
+  transform:translateY(4px);
+  box-shadow:
+    0 4px 0 #a8261b,
+    0 10px 18px -10px rgba(43,33,24,.5),
+    inset 0 2px 0 rgba(255,255,255,.3);
+}
+@keyframes splashBtnIn{
+  0%   { transform:translateY(30px) scale(.7); opacity:0; }
+  100% { transform:translateY(0) scale(1); opacity:1; }
+}
+@keyframes splashBtnPulse{
+  0%,100% { transform:scale(1); }
+  50%     { transform:scale(1.04); }
+}
+/* ห้ามเลื่อนหน้า splash (เลขศูนย์ scroll ทุก scenario) */
+body.no-scroll{ overflow:hidden; }
+
+/* ============================================================
+ *  พื้นหลังเกม — รูปจาก /image/
+ *  - splash + menu: bg.png (จัดการในแต่ละ overlay)
+ *  - ขณะเล่น: สุ่ม bg1-4.png (ใส่ผ่าน inline style #app)
+ * ========================================================== */
+#app{
+  background-size:cover;
+  background-position:center center;
+  background-repeat:no-repeat;
+  transition:background-image .3s ease;
+}
+body.in-game .scene-bg{ display:none; }      /* ซ่อน sun/cloud/ground เมื่อเป็นรูปจริง */
+
+.modal{
+  background:var(--paper);
+  border:2px solid var(--paper-edge);
+  border-radius:28px;
+  box-shadow:var(--shadow-lg);
+  padding:clamp(20px, 4vw, 34px) clamp(22px, 4vw, 38px) clamp(20px, 3vw, 30px);
+  width:min(560px, 92vw);
+  max-height:calc(100dvh - max(32px, calc(var(--safe-top) + var(--safe-bot))));
+  overflow-y:auto;
+  text-align:center;
+  position:relative;
+}
+
+/* ล็อกหน้าต่างเลือกด่าน + หน้า pause + หน้าสรุปคะแนน ไม่ให้เลื่อนสกรอ */
+#menuOverlay .modal,
+#pauseOverlay .modal,
+#endOverlay .modal{
+  overflow:hidden;
+}
+
+/* ============================================================
+ *  Menu modal — โปร่งใส ไม่มีกรอบสี่เหลี่ยม (วางบน bg.png ตรงๆ)
+ *  ขยายขนาดทุกอย่าง สเกลตามจอจริง ไม่ล้น
+ * ========================================================== */
+/* menuOverlay = flex column, banner อยู่ด้านบน modal อยู่ใต้ */
+#menuOverlay{
+  flex-direction:column;
+  gap:clamp(10px, 2vh, 24px);
+}
+#menuOverlay .modal{
+  width:min(720px, 94vw);
+  max-height:calc(100dvh - max(20px, calc(var(--safe-top) + var(--safe-bot))));
+  padding:clamp(16px, 2.4vh, 28px) clamp(20px, 3.5vw, 36px) clamp(16px, 2.4vh, 26px);
+  display:flex; flex-direction:column;
+  gap:clamp(8px, 1.6vh, 16px);
+  background:transparent;
+  border:none;
+  box-shadow:none;
+  border-radius:0;
+  position:relative;
+
+  /* ให้ popup วิธีเล่นกว้างกว่ากล่องเลือกด่านได้ */
+  overflow:visible;
+}
+#menuOverlay .modal::before{ display:none; }
+
+/* banner วางอยู่เหนือ modal — ขยาย 1.5x */
+#menuOverlay .menu-banner{
+  width:min(96%, 1080px);                        /* 1.5x จาก 720px */
+  max-height:clamp(180px, 39vh, 390px);          /* 1.5x จาก 120-260px */
+  height:auto;
+  margin:0 auto;
+  object-fit:contain;
+  display:block;
+  filter:drop-shadow(0 10px 18px rgba(43,33,24,.22));
+}
+/* ซ่อน crest เก่า (วงกลมธนู) และ h1 ในหน้าเมนู — แทนที่ด้วย banner */
+#menuOverlay .crest,
+#menuOverlay h1{ display:none; }
+#menuOverlay .topics{
+  grid-template-columns:repeat(2, 1fr);
+  gap:clamp(12px, 2vw, 20px);
+  margin:0;
+}
+/* ปุ่มเลือกด่าน — เหมือนปุ่ม "เข้าสู่เกม" สีส้ม-เหลือง gradient ทั้งหมด */
+#menuOverlay .topic{
+  appearance:none; border:none; cursor:pointer;
+  font-family:inherit;
+  padding:clamp(10px, 1.6vh, 16px) clamp(14px, 2vw, 20px);   /* ลดลง */
+  border-radius:18px;
+  gap:clamp(10px, 1.4vw, 14px);
+  color:#fff;
+  background:linear-gradient(180deg, #e85547 0%, #d8362c 100%);
+  box-shadow:
+    0 6px 0 #a8261b,
+    0 14px 24px -8px rgba(216,54,44,.45),
+    inset 0 2px 0 rgba(255,255,255,.35);
+  transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  text-align:left;
+  display:flex; align-items:center;
+  position:relative;
+}
+#menuOverlay .topic:hover{
+  transform:translateY(-2px);
+  filter:brightness(1.05);
+  box-shadow:
+    0 8px 0 #a8261b,
+    0 18px 30px -10px rgba(216,54,44,.55),
+    inset 0 2px 0 rgba(255,255,255,.5);
+}
+#menuOverlay .topic:active{
+  transform:translateY(4px);
+  box-shadow:
+    0 2px 0 #a8261b,
+    0 6px 12px -6px rgba(216,54,44,.4),
+    inset 0 2px 0 rgba(255,255,255,.3);
+}
+#menuOverlay .topic .emoji{
+  width:clamp(44px, 5.5vw, 60px);              /* ลดจาก 54-72px */
+  height:clamp(44px, 5.5vw, 60px);
+  border-radius:14px;
+  font-size:clamp(22px, 2.8vw, 30px);          /* ลดจาก 26-36px */
+  background:rgba(255,255,255,.95);
+  box-shadow:inset 0 -3px 0 rgba(43,33,24,.12), 0 4px 10px -4px rgba(0,0,0,.2);
+  color:var(--ink);
+  flex-shrink:0;
+}
+#menuOverlay .topic .t-title{
+  font-size:clamp(16px, 1.9vw, 20px);          /* ลดจาก 17-22px */
+  font-weight:800;
+  line-height:1.15;
+  color:#fff;
+  text-shadow:0 2px 4px rgba(43,33,24,.25);
+}
+#menuOverlay .topic .t-sub{ display:none; }   /* ซ่อน subtitle ในปุ่มเลือกด่าน */
+
+#menuOverlay .btn-row{ margin-top:clamp(4px, 1vh, 12px); }
+
+/* หน้าต่างวิธีเล่น — popup กลางจอ */
+#menuOverlay #howBoxWrap{
+  position:fixed;
+  left:50%;
+  top:50%;
+  transform:translate(-50%, -50%);
+  z-index:20;
+
+  width:min(920px, 96vw);
+  height:auto;
+
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:clamp(12px, 2vh, 18px);
+
+  padding:0 clamp(8px, 1.6vw, 16px);
+  background:transparent;
+}
+
+#menuOverlay #howBoxWrap[style*="display:none"]{
+  display:none !important;
+}
+
+#menuOverlay #howBox{
+  width:100%;
+  min-height:clamp(330px, 44vh, 470px);
+  max-height:none;
+  overflow:visible;
+
+  background:#fffdf6;
+  border:3px solid var(--paper-edge);
+  border-radius:26px;
+
+  padding:
+    clamp(24px, 3.2vh, 36px)
+    clamp(30px, 4.2vw, 52px)
+    clamp(86px, 10vh, 104px);
+
+  box-shadow:
+    0 24px 54px -18px rgba(43,33,24,.52),
+    0 7px 0 rgba(43,33,24,.06);
+
+  text-align:left;
+  color:var(--ink);
+  font-size:clamp(18px, 2vw, 23px);
+  line-height:1.7;
+
+  animation:howBoxPop .22s ease-out;
+}
+
+@keyframes howBoxPop{
+  from{ transform:translateY(10px) scale(.96); opacity:0; }
+  to  { transform:translateY(0) scale(1); opacity:1; }
+}
+
+#menuOverlay #howBox .how-title{
+  display:block;
+  color:var(--accent);
+  font-size:clamp(28px, 3.4vw, 40px);
+  line-height:1.1;
+  margin-bottom:clamp(14px, 2vh, 22px);
+  text-align:center;
+}
+
+#menuOverlay #howBox p{
+  margin:clamp(8px, 1.2vh, 13px) 0;
+  color:var(--ink);
+}
+
+#menuOverlay #howBox ol{
+  margin:clamp(10px, 1.5vh, 16px) 0;
+  padding-left:clamp(28px, 3vw, 38px);
+}
+
+#menuOverlay #howBox ol li{
+  margin:clamp(7px, 1vh, 12px) 0;
+  color:var(--ink);
+}
+
+#menuOverlay #howBox .how-accent{
+  color:var(--accent);
+}
+
+#menuOverlay #howBox .how-foot{
+  margin-top:clamp(16px, 2.2vh, 26px);
+  font-weight:800;
+  color:var(--accent);
+  text-align:center;
+  font-size:clamp(18px, 2.1vw, 24px);
+}
+
+/* ปุ่มเลือกด่าน อยู่มุมขวาล่างของหน้าต่าง */
+#menuOverlay #btnHowClose{
+  position:absolute;
+  right:clamp(28px, 4vw, 54px);
+  bottom:clamp(22px, 3vh, 34px);
+
+  appearance:none;
+  border:none;
+  cursor:pointer;
+  font-family:inherit;
+  font-weight:800;
+  font-size:clamp(17px, 1.9vw, 22px);
+
+  padding:clamp(11px, 1.4vh, 15px) clamp(30px, 4vw, 44px);
+  border-radius:999px;
+
+  color:#fff;
+  background:linear-gradient(180deg, #e85547 0%, #d8362c 100%);
+  box-shadow:
+    0 5px 0 #a8261b,
+    0 12px 22px -8px rgba(216,54,44,.5),
+    inset 0 2px 0 rgba(255,255,255,.35);
+
+  transition:transform .12s ease, box-shadow .12s ease;
+  letter-spacing:.02em;
+}
+
+#menuOverlay #btnHowClose:hover{
+  transform:translateY(-2px);
+}
+
+#menuOverlay #btnHowClose:active{
+  transform:translateY(3px);
+  box-shadow:
+    0 2px 0 #a8261b,
+    0 5px 10px -5px rgba(216,54,44,.4),
+    inset 0 2px 0 rgba(255,255,255,.3);
+}
+.modal::before{
+  content:"";
+  position:absolute; top:-30px; left:-30px; right:-30px; height:80px;
+  background:repeating-linear-gradient(45deg, var(--accent) 0 18px, #fff 18px 36px);
+  transform:rotate(-3deg);
+  opacity:.12;
+  pointer-events:none;
+}
+.modal h1{
+  font-family:"Fraunces","Kanit",serif; font-weight:800;
+  font-size:clamp(28px, 4.6vw, 52px);
+  margin:6px 0 4px;
+  letter-spacing:-.02em;
+}
+.modal .subtitle{
+  color:var(--ink-soft);
+  margin:0 0 18px;
+  font-size:clamp(13px, 1.6vw, 16px);
+}
+.modal .crest{
+  width:clamp(64px, 10vw, 88px); height:clamp(64px, 10vw, 88px);
+  margin:0 auto 8px;
+  display:grid; place-items:center;
+  background:#fff; border:3px solid #2f7ed4;
+  border-radius:50%;
+  box-shadow:0 0 0 4px rgba(216,54,44,.25), var(--shadow);
+}
+.modal .crest svg{ width:60%; height:60%; }
+
+.btn{
+  appearance:none; border:none; cursor:pointer;
+  font-family:inherit; font-weight:700;
+  font-size:clamp(15px, 1.7vw, 18px);
+  padding:clamp(11px, 1.4vh, 14px) clamp(20px, 3vw, 26px);
+  border-radius:14px;
+  background:#d8362c;            /* แดง (ธีมกระสอบขวา) */
+  color:#fff;
+  box-shadow:0 6px 0 #a8261b, 0 14px 24px -10px rgba(43,33,24,.4);
+  transition:transform .08s ease, box-shadow .08s ease;
+}
+.btn:hover{ transform:translateY(-1px); }
+.btn:active{ transform:translateY(3px); box-shadow:0 3px 0 #a8261b, 0 8px 14px -10px rgba(43,33,24,.4); }
+.btn.secondary{
+  background:#2f7ed4;            /* น้ำเงิน (ธีมกระสอบซ้าย) */
+  color:#fff;
+  box-shadow:0 6px 0 #1f5aa6, 0 14px 24px -10px rgba(43,33,24,.3);
+}
+.btn.secondary:active{ box-shadow:0 3px 0 #1f5aa6, 0 8px 14px -10px rgba(43,33,24,.3); }
+
+.btn-row{
+  display:flex; gap:10px; justify-content:center; flex-wrap:wrap;
+  margin-top:18px;
+}
+.stat-grid{
+  display:grid; grid-template-columns:repeat(3, 1fr);
+  gap:10px; margin:18px 0 8px;
+}
+.stat-grid .stat{
+  background:#fff; border:3px solid var(--paper-edge);
+  border-radius:16px; padding:14px 8px;
+}
+#endOverlay .stat-grid .stat:nth-child(1){ border-color:#2f7ed4; background:#f1f7fe; }
+#endOverlay .stat-grid .stat:nth-child(2){ border-color:#d8362c; background:#fef3f1; }
+#endOverlay .stat-grid .stat:nth-child(3){ border-color:#2f7ed4; background:#f1f7fe; }
+.stat .num{
+  font-family:"Fraunces","Kanit",serif; font-weight:800;
+  font-size:clamp(22px, 3.6vw, 32px); line-height:1; color:#d8362c;
+}
+.stat .lbl{
+  font-size:clamp(10px, 1.1vw, 12px); letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-soft); margin-top:4px;
+}
+
+.topics{
+  display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;
+  margin:14px 0 6px;
+}
+.topic{
+  appearance:none; border:2px solid var(--paper-edge); background:#fff;
+  border-radius:14px; padding:clamp(10px, 1.6vw, 14px) clamp(10px, 1.6vw, 12px);
+  font-family:inherit; cursor:pointer; text-align:left;
+  display:flex; align-items:center; gap:12px;
+  transition:transform .1s ease, border-color .15s ease, background .15s ease;
+}
+.topic{ border-width:3px; }
+.topic{ border-color:#e88a7e; background:#fdeeeb; }                 /* ปุ่มด่าน: สีแดง */
+.topic:hover{ transform:translateY(-2px); border-color:#d8362c; background:#fce3de; }
+.topic.active{ border-color:#d8362c; background:#fcdcd6; }
+.topic .emoji{
+  width:clamp(36px, 4.4vw, 44px); height:clamp(36px, 4.4vw, 44px);
+  border-radius:12px;
+  display:grid; place-items:center;
+  font-family:"Fraunces","Kanit",serif; font-weight:800;
+  font-size:clamp(18px, 2.4vw, 24px);
+  color:#d8362c;
+  background:#ffffff; border:2px solid #d8362c;
+  flex-shrink:0;
+}
+.topic .t-title{ font-weight:700; font-size:clamp(14px, 1.6vw, 16px); line-height:1.1; }
+.topic .t-sub{ font-size:clamp(11px, 1.2vw, 12px); color:var(--ink-soft); margin-top:2px; }
+
+/* Preload */
+#preloadOverlay .pl-wrap{ width:min(420px, 86vw); text-align:center; }
+#preloadOverlay h2{
+  font-family:"Fraunces","Kanit",serif; font-weight:800;
+  font-size:clamp(22px, 3.6vw, 32px);
+  margin:0 0 14px; color:var(--ink);
+}
+#preloadBarWrap{
+  width:100%; height:14px;
+  background:rgba(43,33,24,.12);
+  border:2px solid var(--paper-edge);
+  border-radius:999px;
+  overflow:hidden;
+  box-shadow:inset 0 2px 4px rgba(43,33,24,.12);
+}
+#preloadBar{
+  height:100%; width:0%;
+  background:linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition:width 180ms ease;
+  border-radius:999px;
+}
+#preloadPercent{
+  margin-top:10px;
+  font-weight:700; font-size:clamp(16px, 2vw, 22px); color:var(--ink);
+}
+
+/* Countdown */
+#countdownOverlay .cd-num{
+  font-family:"Fraunces","Kanit",serif; font-weight:800;
+  font-size:clamp(96px, 22vw, 220px);
+  color:#fff;
+  text-shadow:0 8px 24px rgba(0,0,0,.5);
+  line-height:1;
+  animation:cdPulse 1s ease-in-out;
+}
+@keyframes cdPulse{
+  0%{ transform:scale(.4); opacity:0; }
+  30%{ transform:scale(1.15); opacity:1; }
+  100%{ transform:scale(1); opacity:1; }
+}
+
+/* ============================================================
+ *  End game emoji rain — โปรยอีโมจิฉลองจบเกม
+ * ========================================================== */
+.end-emoji{
+  position:fixed;
+  top:-60px;
+  z-index:75;             /* อยู่บน endOverlay (55) แต่ใต้ countdown (70) */
+  pointer-events:none;
+  user-select:none;
+  line-height:1;
+  filter:drop-shadow(0 4px 6px rgba(43,33,24,.25));
+  animation:emojiFall linear forwards;
+  will-change:transform;
+}
+@keyframes emojiFall{
+  0%   { transform:translate(0, -10vh) rotate(0deg); opacity:0; }
+  10%  { opacity:1; }
+  100% { transform:translate(var(--drift, 0px), 110vh) rotate(var(--rot, 360deg)); opacity:1; }
+}
+
+/* ============================================================
+ *  Floating control buttons (mute / fullscreen / camera)
+ * ========================================================== */
+.float-controls{
+  position:fixed;
+  right:calc(12px + var(--safe-right));
+  bottom:calc(12px + var(--safe-bot));
+  display:flex; flex-direction:column; gap:8px;
+  z-index:80;
+  pointer-events:auto;
+}
+.float-controls .iconbtn{ width:44px; height:44px; }
+.float-controls .iconbtn[disabled]{ opacity:.55; cursor:wait; }
+
+/* Volume control — ปุ่ม mute แบบเดิม + popup slider เด้งทางซ้าย */
+.vol-control{ position:relative; }
+.vol-control .iconbtn .ic-off{ display:none; }
+.vol-control.muted .iconbtn{ background:#fde7e3; border-color:#d8362c; color:#d8362c; }
+.vol-control.muted .iconbtn .ic-on{  display:none; }
+.vol-control.muted .iconbtn .ic-off{ display:inline-block; }
+
+/* popup — เด้งทางซ้ายของปุ่ม */
+.vol-popup{
+  position:absolute;
+  right:calc(100% + 8px);
+  top:50%;
+  transform:translateY(-50%) scale(.85);
+  transform-origin:right center;
+  display:flex; align-items:center; gap:8px;
+  padding:8px 12px;
+  background:rgba(255,255,255,.96);
+  border:2px solid rgba(43,33,24,.12);
+  border-radius:24px;
+  box-shadow:0 6px 16px -6px rgba(43,33,24,.35);
+  opacity:0;
+  pointer-events:none;
+  visibility:hidden;
+  transition:opacity .15s ease, transform .15s ease, visibility 0s linear .15s;
+  white-space:nowrap;
+}
+.vol-control.open .vol-popup{
+  opacity:1;
+  transform:translateY(-50%) scale(1);
+  pointer-events:auto;
+  visibility:visible;
+  transition:opacity .15s ease, transform .15s ease, visibility 0s;
+}
+
+/* ปุ่ม mute เล็กใน popup */
+.vol-mini{
+  appearance:none;
+  width:32px; height:32px;
+  border-radius:50%;
+  border:none;
+  background:transparent;
+  color:var(--ink);
+  cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+  transition:background .15s ease;
+  flex-shrink:0;
+}
+.vol-mini:hover{ background:rgba(43,33,24,.08); }
+.vol-mini .ic-off{ display:none; }
+.vol-control.muted .vol-mini{ color:#9a4a3a; }
+.vol-control.muted .vol-mini .ic-on{  display:none; }
+.vol-control.muted .vol-mini .ic-off{ display:inline-block; }
+
+/* Slider */
+.vol-popup #volSlider{
+  appearance:none; -webkit-appearance:none;
+  width:120px; height:6px;
+  background:linear-gradient(to right, var(--accent) var(--vol-fill, 60%), rgba(43,33,24,.18) var(--vol-fill, 60%));
+  border-radius:999px;
+  outline:none;
+  cursor:pointer;
+  margin:0;
+}
+.vol-popup #volSlider::-webkit-slider-thumb{
+  appearance:none; -webkit-appearance:none;
+  width:16px; height:16px;
+  border-radius:50%;
+  background:var(--accent);
+  border:2px solid #fff;
+  box-shadow:0 2px 6px -2px rgba(43,33,24,.4);
+  cursor:pointer;
+  transition:transform .12s ease;
+}
+.vol-popup #volSlider::-webkit-slider-thumb:hover{ transform:scale(1.15); }
+.vol-popup #volSlider::-moz-range-thumb{
+  width:16px; height:16px;
+  border-radius:50%;
+  background:var(--accent);
+  border:2px solid #fff;
+  box-shadow:0 2px 6px -2px rgba(43,33,24,.4);
+  cursor:pointer;
+}
+.vol-control.muted .vol-popup #volSlider{
+  background:linear-gradient(to right, rgba(43,33,24,.3) var(--vol-fill, 0%), rgba(43,33,24,.15) var(--vol-fill, 0%));
+}
+.vol-control.muted .vol-popup #volSlider::-webkit-slider-thumb{ background:#9a8a7a; }
+.vol-control.muted .vol-popup #volSlider::-moz-range-thumb{ background:#9a8a7a; }
+@media (max-width:480px){
+  .vol-popup #volSlider{ width:100px; }
+}
+
+/* ============================================================
+ *  Responsive
+ * ========================================================== */
+@media (max-width:720px){
+  .archer{ left:14px; }
+  .targets{ right:14px; }
+  .hud{ padding:8px 10px; gap:6px; }
+  .hud .pill{ font-size:13px; padding:6px 10px; }
+  .topics{ grid-template-columns:1fr; }
+  #menuOverlay .topics{ grid-template-columns:1fr; }
+  #menuOverlay .menu-banner{ max-height:clamp(150px, 30vh, 270px); }
+}
+@media (max-height:520px){
+  .question{ padding:6px 14px; }
+  .modal{ padding:18px 22px 16px; }
+  .modal h1{ font-size:24px; margin:2px 0; }
+  .modal .subtitle{ margin:0 0 10px; font-size:13px; }
+  .modal .crest{ display:none; }
+  .stat-grid{ margin:10px 0 4px; }
+  #menuOverlay .menu-banner{ max-height:25vh; }
+  #menuOverlay .modal{ gap:8px; padding:12px 18px; }
+  #menuOverlay .topic{ padding:8px 12px; }
+  #menuOverlay #howBox{
+  min-height:clamp(260px, 52vh, 330px);
+  font-size:clamp(15px, 1.8vw, 18px);
+  line-height:1.55;
+  padding:
+    clamp(18px, 2.4vh, 24px)
+    clamp(22px, 3vw, 34px)
+    clamp(72px, 9vh, 86px);
+}
+
+#menuOverlay #howBox .how-title{
+  font-size:clamp(22px, 2.8vw, 30px);
+  margin-bottom:10px;
+}
+
+#menuOverlay #howBox ol li{
+  margin:4px 0;
+}
+  #splashOverlay .splash-banner{ max-height:90dvh; }
+}
+/* จอแนวนอนเตี้ย — ให้ banner หดและ topic เล็กลงไม่ให้ล้น */
+@media (max-height:420px){
+  #menuOverlay .menu-banner{ max-height:135px; }
+  #menuOverlay .topic{ padding:8px 12px; }
+  #menuOverlay .topic .emoji{ width:40px; height:40px; font-size:20px; }
+  #menuOverlay .topic .t-title{ font-size:14px; }
+}
+
+/* ============================================================
+ *  จอแนวนอนเตี้ย (มือถือหมุนนอน) — กันเป้าล้นเฟรม + ย่อหน้าเวลคัม
+ *  แก้เฉพาะ "ขนาด" บนจอเตี้ย ไม่แตะธีม/สี/โครงสร้าง
+ *  วางท้ายสุดเพื่อให้ override กฎ max-height:520px ด้านบน
+ * ========================================================== */
+@media (orientation:landscape) and (max-height:520px){
+  /* เป้า: ให้อิงความสูงจอเป็นหลัก เพื่อให้ 3 อันพอดีใน field เสมอ */
+  .target{ width:min(clamp(52px, 17vh, 130px), 15vw); }
+  .targets{
+    padding:clamp(6px, 1.5vh, 14px) 0;
+    gap:clamp(4px, 1vh, 10px);
+  }
+
+  /* หน้าเวลคัม: แบนเนอร์อิงความสูง (ไม่เต็มกว้าง) + ปุ่มเล็กลง (เลิกใช้ vw) */
+  #splashOverlay .splash-banner{
+    width:auto;
+    max-width:78vw;
+    max-height:62dvh;
+  }
+  #splashOverlay .splash-wrap{ gap:clamp(8px, 2vh, 18px); }
+  #splashOverlay .splash-enter{
+    font-size:clamp(15px, 2.4vmin, 22px);
+    padding:10px 28px;
+  }
+}
+
+/* ============================================================
+ *  BOXING GAME — ใช้รูปภาพจากโฟลเดอร์ image/ (ระบบใหม่)
+ *  ทุกชิ้นสเกลตามความสูงจอ (vh) แบบเรียลไทม์
+ * ========================================================== */
+
+/* ---- ป้ายไม้ wood.png : ชิดขอบบน กลางจอ ---- */
+.sign-wrap{
+  position:absolute;
+  top:max(2px, var(--safe-top));
+  left:50%;
+  transform:translateX(-50%);
+  height:clamp(110px, 28vh, 380px);
+  z-index:6;
+  pointer-events:none;
+  display:flex; align-items:center; justify-content:center;
+}
+.sign-img{ height:100%; width:auto; aspect-ratio:520/280; display:block; user-select:none; -webkit-user-drag:none;
+  filter:drop-shadow(0 8px 16px rgba(43,33,24,.4)); }
+.sign-title{
+  position:absolute; left:50%; top:64.6%;
+  transform:translate(-50%, -50%);
+  width:84%; text-align:center;
+  font-family:"Mali","Kanit","Noto Sans Thai",sans-serif; font-weight:700;
+  font-size:clamp(18px, 4.4vh, 54px);
+  line-height:1.55; color:#ffffff;
+  overflow:visible;
+  text-shadow:0 3px 5px rgba(0,0,0,.6), 0 0 3px rgba(0,0,0,.55), 0 1px 0 rgba(0,0,0,.5);
+  pointer-events:none;
+}
+.sign-wrap.flash-correct .sign-img{ animation:signGood .5s ease; }
+.sign-wrap.flash-wrong   .sign-img{ animation:signBad .5s ease; }
+@keyframes signGood{ 0%,100%{filter:drop-shadow(0 8px 16px rgba(43,33,24,.4));} 40%{filter:drop-shadow(0 0 14px rgba(58,165,100,.95));} }
+@keyframes signBad{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-7px);} 75%{transform:translateX(7px);} }
+
+/* ---- กระสอบทราย box.png : ชิดขอบบน(เลยขึ้นไปเล็กน้อย) ถัดจากป้ายทางขวา ---- */
+.sandbag-wrap{
+  position:absolute;
+  top:-3vh;
+  transform:translateX(-50%);
+  height:82vh;                    /* ลง 5% โดยคง top เดิม (ปลายเชือกเท่าเดิม) */
+  z-index:4;
+  pointer-events:auto;
+}
+.sandbag-wrap.left{ left:20.4%; }   /* ขยับเข้ากลาง 20% */
+body.cam-on .sandbag-wrap.left{ left:15.4%; }   /* โหมดกล้อง */
+.sandbag-wrap.right{ left:79.6%; }  /* ขยับเข้ากลาง 20% */
+body.cam-on .sandbag-wrap.right{ left:84.6%; }  /* โหมดกล้อง */
+/* โหมดกล้อง: ต่อเชือกยาวขึ้น (height +) → ลูกบอลเลื่อนลง ~5% แต่ปม/ปลายเชือกยังอยู่ที่ top เดิม (เลยขอบบน) */
+body.cam-on .sandbag-wrap{ height:89vh; }
+.sandbag-swing{
+  position:relative;
+  height:100%;
+  transform-origin:50% 0;         /* จุดหมุน = ปลายเชือก/ปม (อยู่ขอบบนกรอบพอดี) */
+  display:flex; justify-content:center;
+  cursor:pointer;
+}
+.sandbag-img{ height:100%; width:auto; aspect-ratio:400/720; display:block; user-select:none; -webkit-user-drag:none;
+  filter:drop-shadow(0 16px 22px -12px rgba(43,33,24,.5)); }
+.sandbag-text{
+  position:absolute; left:50%; top:72.2%;
+  transform:translate(-50%, -50%);
+  width:auto; text-align:center;
+  font-family:"Mali","Kanit","Noto Sans Thai",sans-serif; font-weight:700;
+  font-size:clamp(27px, 5.7vh, 66px);
+  line-height:1.35; color:#ffffff;
+  text-shadow:0 3px 5px rgba(0,0,0,.65), 0 0 3px rgba(0,0,0,.6), 0 1px 0 rgba(0,0,0,.5);
+  white-space:nowrap;            /* แต่ละบรรทัด(คั่นด้วย <br>) ไม่ตัดคำ = 2 บรรทัด ปล่อยล้นวงได้ */
+  pointer-events:none;
+}
+/* กระสอบเปลี่ยนสีไปเรื่อยๆ (หลายสี) */
+.sandbag-ball{ transition:filter .25s ease; }
+/* ป้ายจำนวนครั้งที่ต้องชก */
+.hit-badge{
+  position:absolute; top:52%; right:10%;
+  min-width:32px; height:32px; padding:0 7px;
+  display:none; align-items:center; justify-content:center;
+  background:var(--accent-2); color:#2b2118;
+  border:3px solid #fff; border-radius:999px;
+  font-family:"Mali","Kanit",sans-serif; font-weight:700;
+  font-size:16px; z-index:5;
+  box-shadow:0 4px 10px -4px rgba(0,0,0,.5);
+}
+.hit-badge.show{ display:inline-flex; }
+.hit-badge.crit{ background:#ffd23f; box-shadow:0 0 0 4px rgba(255,210,63,.4), 0 4px 10px -4px rgba(0,0,0,.5); }
+
+/* ---- นักมวย boxer1-4.png : ล่างซ้าย ขยับขึ้น ---- */
+.boxer{
+  position:absolute;
+  left:50%;                          /* อยู่กลางระหว่างกระสอบ 2 ฝั่ง */
+  transform:translateX(-50%);
+  bottom:clamp(20px, 6vh, 110px);
+  height:clamp(260px, max(60vh, 34vw), 1000px);  /* สเกลตามจอจริง ไม่เล็กกว่าปัจจุบัน */
+  z-index:3;
+  pointer-events:none;
+}
+.boxer{ display:flex; justify-content:center; }
+.boxer-img{ height:100%; width:auto; display:block; margin:0 auto; user-select:none; -webkit-user-drag:none;
+  --sx:1; transform:scaleX(var(--sx)); transition:transform .12s ease; }
+.boxer-img.face-left{ --sx:-1; }            /* พลิกซ้ายเมื่อชกกระสอบซ้าย */
+.boxer.lunge .boxer-img{ animation:boxerLunge .26s ease; }
+@keyframes boxerLunge{
+  0%{ transform:scaleX(var(--sx)) translateX(0); }
+  45%{ transform:scaleX(var(--sx)) translateX(20px); }
+  100%{ transform:scaleX(var(--sx)) translateX(0); }
+}
+
+/* การปรากฏกระสอบ: เลื่อนลงจากด้านบน (จุดหมุน=บนสุด) */
+.sandbag-swing.drop-in{ animation:bagDrop .95s cubic-bezier(.25,.46,.45,1); }
+@keyframes bagDrop{
+  0%{ transform:translateY(-130%); opacity:0; }
+  100%{ transform:translateY(0); opacity:1; }
+}
+/* โดนชก = แกว่งแบบลูกตุ้ม (จุดหมุน=จุดรวบเชือกด้านบน) */
+.sandbag-swing.hitshake{ animation:bagShake .42s ease-out; }
+@keyframes bagShake{
+  0%{ transform:rotate(0deg); }
+  45%{ transform:rotate(-12deg); }
+  100%{ transform:rotate(0deg); }
+}
+.sandbag-swing.hitshake-left{ animation:bagShakeL .42s ease-out; }
+@keyframes bagShakeL{
+  0%{ transform:rotate(0deg); }
+  45%{ transform:rotate(12deg); }
+  100%{ transform:rotate(0deg); }
+}
+/* ตอบถูก(ชกครบ) = หมุนรอบปมแบบเข็มนาฬิกา จนเหวี่ยงออกจอ (ปมอยู่กับที่) */
+.sandbag-swing.fly-out{ animation:bagFly .85s cubic-bezier(.45,.02,.85,.5) forwards; }
+@keyframes bagFly{
+  0%{ transform:rotate(0deg); opacity:1; }
+  65%{ transform:rotate(-135deg); opacity:1; }
+  100%{ transform:rotate(-235deg); opacity:0; }
+}
+/* ฝั่งซ้ายกระเด็นไปทางซ้าย (ตรงข้ามฝั่งขวา) */
+.sandbag-swing.fly-out-left{ animation:bagFlyL .85s cubic-bezier(.45,.02,.85,.5) forwards; }
+/* กระสอบฝั่งที่ไม่ได้เลือก = เฟดหายไป */
+.sandbag-swing.fade-out{ animation:bagFade .45s ease forwards; }
+@keyframes bagFade{ from{ opacity:1; } to{ opacity:0; } }
+@keyframes bagFlyL{
+  0%{ transform:rotate(0deg); opacity:1; }
+  65%{ transform:rotate(135deg); opacity:1; }
+  100%{ transform:rotate(235deg); opacity:0; }
+}
+/* ปล่อยตัวหลอกหมดเวลา = ลอยจางหายขึ้นบน */
+.sandbag-swing.let-pass{ animation:bagPass .5s ease forwards; }
+@keyframes bagPass{
+  0%{ transform:translateY(0); opacity:1; }
+  100%{ transform:translateY(-120%); opacity:0; }
+}
+
+/* โหมดกล้อง: เพิ่มเงาให้อ่านง่ายบนภาพคน */
+body.cam-on .sign-img,
+body.cam-on .sandbag-img{ filter:drop-shadow(0 10px 26px rgba(0,0,0,.7)); }
+body.cam-on .sandbag-text{ text-shadow:0 3px 6px rgba(0,0,0,.8), 0 0 3px rgba(0,0,0,.7); }
+
+/* เอฟเฟกต์ตอบถูก/ผิด — ฟอนต์น่ารักประถม ตัวหนา */
+.floater{
+  font-family:"Mali","Kanit","Noto Sans Thai",cursive !important;
+  font-weight:700 !important;
+  letter-spacing:0 !important;
+}
+.punch-fx{
+  position:absolute; pointer-events:none; z-index:6;
+  font-family:"Mali","Kanit",cursive; font-weight:700;
+  font-size:clamp(26px,4vw,44px); color:var(--accent-2);
+  text-shadow:0 3px 0 rgba(43,33,24,.3), 0 0 14px rgba(243,177,63,.6);
+  animation:punchFx .55s ease forwards;
+}
+@keyframes punchFx{
+  0%{ transform:translate(-50%,-50%) scale(.4) rotate(-12deg); opacity:0; }
+  30%{ transform:translate(-50%,-50%) scale(1.25) rotate(6deg); opacity:1; }
+  100%{ transform:translate(-50%,-90%) scale(1) rotate(0); opacity:0; }
+}
+
+
+/* การ์ดวิธีเล่นในโหมดกล้อง (แทนรูป guide.png เดิม) */
+#guideOverlay .guide-card{
+  width:min(86vw, 640px);
+  background:#fffdf6;
+  border:3px solid var(--paper-edge);
+  border-radius:22px;
+  padding:clamp(16px,2.4vh,26px) clamp(20px,4vw,34px);
+  box-shadow:var(--shadow-lg);
+  text-align:left;
+  animation:guidePop .5s cubic-bezier(.34,1.56,.64,1) both;
+}
+#guideOverlay .guide-card ol{ margin:0; padding-left:1.3em; }
+#guideOverlay .guide-card li{
+  font-family:"Kanit","Noto Sans Thai",sans-serif;
+  font-size:clamp(14px,1.9vw,19px); color:var(--ink);
+  line-height:1.5; margin:6px 0;
+}
+#guideOverlay .guide-card b{ color:var(--accent); }
+
+/* แฟลชนุ่มๆ สีแดงเมื่อตอบผิด */
+#wrongFlash{
+  position:fixed; inset:0; z-index:60; pointer-events:none;
+  background:#e23a2c;            /* แดงเต็มจอ */
+  opacity:0;
+}
+#wrongFlash.show{ animation:wrongFlash .6s ease-out; }
+@keyframes wrongFlash{ 0%{opacity:0;} 22%{opacity:.42;} 100%{opacity:0;} }
+
+/* กล่องสรุปคะแนน — รูปทรง + ธีมแดง/น้ำเงิน */
+#endOverlay .modal{
+  background:#eef5fc;
+  border:4px solid #ffffff;
+  border-radius:40px 40px 26px 26px;
+  box-shadow:0 0 0 5px #2f7ed4, 0 0 0 10px #d8362c, 0 24px 54px -18px rgba(43,33,24,.55);
+}
+
+#menuOverlay .topic .emoji{ background:#ffffff; color:#d8362c; }  /* กล่องสัญลักษณ์ขาว */
+</style>
+</head>
+
+<body class="pre-game">
+
+<!-- ========= Camera layer ========= -->
+<video id="cameraMirror" playsinline muted></video>
+<canvas id="camCanvas"></canvas>
+
+<!-- ========= Camera bow (โหมดกล้อง — recurve bow แบบเดียวกับนักธนู) ========= -->
+<!-- ========= Camera bow (โหมดกล้อง) =========
+     - ใช้ภาพ bow1.png (ก่อนยิง) / bow2.png (หลังยิง) สลับกัน
+     - ลูกธนู SVG ทับอยู่บนภาพธนู (เหมือนโหมดปกติ)
+     - จุด grip = กึ่งกลางของ container = ตำแหน่งมือผู้เล่น
+-->
+<div id="camBow" aria-hidden="true">
+  <img id="camBowImg" class="bow-frame" src="image/bow1.png" alt="" draggable="false">
+  <svg id="camBowArrow" class="cam-bow-arrow" viewBox="-100 -100 200 200" aria-hidden="true">
+    <g class="nockedArrow">
+      <!-- ก้าน: หาง -98 (เกือบสุดซ้าย) → ปลายแหลม 18 (เกิน grip นิดเดียว) -->
+      <line x1="-98" y1="0" x2="6" y2="0" stroke="#b07a3a" stroke-width="4" stroke-linecap="round"/>
+      <line x1="-98" y1="0" x2="6" y2="0" stroke="#7a4a1f" stroke-width="1.2" opacity=".5" transform="translate(0 1)"/>
+      <!-- ferrule ก่อนหัวเหล็ก -->
+      <rect x="-9" y="-3" width="4" height="6" fill="#3a2a1f"/>
+      <!-- หัวเหล็ก (ปลาย 18, ฐาน 0) -->
+      <polygon points="18,0 0,-7 0,7" fill="#2b2118"/>
+      <polygon points="18,0 6,-3 6,3" fill="#5b4a3b"/>
+      <line x1="0" y1="0" x2="16" y2="0" stroke="#fff" stroke-width="0.6" opacity=".5"/>
+      <!-- ขนหาง ที่หาง (-98) -->
+      <polygon points="-98,0 -114,-8 -110,0 -114,8" fill="#e26a4f"/>
+      <polygon points="-104,0 -118,-6 -114,0 -118,6" fill="#f3b13f"/>
+      <line x1="-114" y1="-5" x2="-102" y2="0" stroke="#b8513c" stroke-width="0.6"/>
+      <line x1="-114" y1="5"  x2="-102" y2="0" stroke="#b8513c" stroke-width="0.6"/>
+      <rect x="-102" y="-2" width="5" height="4" rx="1" fill="#2b2118"/>
+    </g>
+  </svg>
+</div>
+
+<!-- ========= Warning เมื่อผู้เล่นเข้าใกล้เป้าเกินไป ========= -->
+<div id="zoneWarning">
+  <div class="zwIcon">⚠️</div>
+  <div class="zwText">ถอยหลัง — อย่าเข้าใกล้เป้ายิง</div>
+</div>
+
+<!-- ========= App ========= -->
+<div id="app">
+  <div class="scene-bg">
+    <div class="sun"></div>
+    <div class="cloud" style="width:80px; top:14%; left:18%;"></div>
+    <div class="cloud" style="width:110px; top:9%; left:64%;"></div>
+    <div class="cloud" style="width:64px; top:22%; left:42%;"></div>
+    <div class="ground"></div>
+  </div>
+
+  <div class="hud">
+    <div class="pill score">
+      <span class="ico">🥊</span>
+      <div class="value" id="hudScore">0</div>
+    </div>
+    <div class="pill timer">
+      <span class="ico">⏱</span>
+      <div class="value" id="hudTime">120</div>
+    </div>
+    <div class="pill streak">
+      <span class="ico">❤️</span>
+      <div class="value" id="hudStreak">10</div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <button class="iconbtn" id="btnPause" title="พัก / เล่นต่อ" aria-label="Pause">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="6" y="5" width="4" height="14" rx="1.5" fill="currentColor"></rect><rect x="14" y="5" width="4" height="14" rx="1.5" fill="currentColor"></rect></svg>
+    </button>
+    <button class="iconbtn" id="btnHome" title="กลับเมนู" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V20h14V9.5"></path></svg>
+    </button>
+  </div>
+
+  <!-- ========= ป้ายไม้แสดงหัวข้อ (wood.png) ========= -->
+  <div class="sign-wrap" id="signWrap">
+    <svg class="sign-img" id="signImg" viewBox="0 0 520 280" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <defs>
+          <linearGradient id="ropeGL" gradientUnits="userSpaceOnUse" x1="90" y1="0" x2="106" y2="0">
+            <stop offset="0" stop-color="#b07d36"/><stop offset="0.5" stop-color="#e3b76e"/><stop offset="1" stop-color="#a9762f"/>
+          </linearGradient>
+          <linearGradient id="ropeGR" gradientUnits="userSpaceOnUse" x1="414" y1="0" x2="430" y2="0">
+            <stop offset="0" stop-color="#b07d36"/><stop offset="0.5" stop-color="#e3b76e"/><stop offset="1" stop-color="#a9762f"/>
+          </linearGradient>
+          <linearGradient id="signBox" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#f6a93f"/><stop offset="1" stop-color="#e07a22"/>
+          </linearGradient>
+        </defs>
+        <line x1="98" y1="96" x2="98" y2="0" stroke="url(#ropeGL)" stroke-width="15.0" stroke-linecap="round"/>
+        <line x1="102.2" y1="96" x2="102.2" y2="0" stroke="#8c5f28" stroke-width="2.4" stroke-linecap="round" opacity="0.5"/>
+        <line x1="93.8" y1="96" x2="93.8" y2="0" stroke="#f4d79a" stroke-width="2.2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="90.5" y1="102.0" x2="105.5" y2="90.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="90.5" y1="87.0" x2="105.5" y2="75.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="90.5" y1="72.0" x2="105.5" y2="60.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="90.5" y1="57.0" x2="105.5" y2="45.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="90.5" y1="42.0" x2="105.5" y2="30.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="90.5" y1="27.0" x2="105.5" y2="15.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="90.5" y1="12.0" x2="105.5" y2="0.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="422" y1="96" x2="422" y2="0" stroke="url(#ropeGR)" stroke-width="15.0" stroke-linecap="round"/>
+        <line x1="426.2" y1="96" x2="426.2" y2="0" stroke="#8c5f28" stroke-width="2.4" stroke-linecap="round" opacity="0.5"/>
+        <line x1="417.8" y1="96" x2="417.8" y2="0" stroke="#f4d79a" stroke-width="2.2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="414.5" y1="102.0" x2="429.5" y2="90.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="414.5" y1="87.0" x2="429.5" y2="75.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="414.5" y1="72.0" x2="429.5" y2="60.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="414.5" y1="57.0" x2="429.5" y2="45.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="414.5" y1="42.0" x2="429.5" y2="30.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="414.5" y1="27.0" x2="429.5" y2="15.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="414.5" y1="12.0" x2="429.5" y2="0.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <circle cx="98" cy="96" r="9" fill="none" stroke="#b9bfc6" stroke-width="4.5"/>
+        <circle cx="422" cy="96" r="9" fill="none" stroke="#b9bfc6" stroke-width="4.5"/>
+        <rect x="30" y="92" width="460" height="178" rx="34" fill="url(#signBox)" stroke="#b95e1c" stroke-width="9"/>
+        <rect x="44" y="106" width="432" height="150" rx="26" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.45"/>
+      </svg>
+    <div class="sign-title" id="signTitle">น้ำเกลือ</div>
+  </div>
+
+  <!-- ========= กระสอบทราย (box.png) — เป็นลูกของ #app เพื่อให้ขอบบนล้นจอจริง ========= -->
+  <!-- ========= กระสอบทราย 2 ฝั่ง: ซ้าย(น้ำเงิน=กายภาพ) / ขวา(แดง=เคมี) ========= -->
+  <div class="sandbag-wrap left" id="sandbagWrapL">
+    <div class="sandbag-swing" id="sandbagSwingL">
+      <svg class="sandbag-img" id="sandbagImgL" viewBox="0 0 400 720" preserveAspectRatio="xMidYMin meet" aria-hidden="true">
+        <defs>
+          <linearGradient id="ropeBodyL" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#b07d36"/><stop offset="0.5" stop-color="#e3b76e"/><stop offset="1" stop-color="#a9762f"/>
+          </linearGradient>
+          <linearGradient id="ballL" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#d6ecff"/><stop offset="1" stop-color="#2f7ed4"/>
+          </linearGradient>
+        </defs>
+        <line x1="200.0" y1="4.0" x2="152.0" y2="338.0" stroke="url(#ropeBodyL)" stroke-width="15.0" stroke-linecap="round"/>
+        <line x1="195.8" y1="3.4" x2="147.8" y2="337.4" stroke="#8c5f28" stroke-width="2.4" stroke-linecap="round" opacity="0.5"/>
+        <line x1="204.2" y1="4.6" x2="156.2" y2="338.6" stroke="#f4d79a" stroke-width="2.2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="193.4" y1="-3.0" x2="206.6" y2="11.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="191.3" y1="11.8" x2="204.4" y2="25.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="189.2" y1="26.7" x2="202.3" y2="40.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="187.0" y1="41.5" x2="200.2" y2="55.5" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="184.9" y1="56.4" x2="198.0" y2="70.4" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="182.8" y1="71.2" x2="195.9" y2="85.2" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="180.6" y1="86.1" x2="193.8" y2="100.1" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="178.5" y1="100.9" x2="191.6" y2="114.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="176.4" y1="115.8" x2="189.5" y2="129.8" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="174.2" y1="130.6" x2="187.4" y2="144.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="172.1" y1="145.5" x2="185.2" y2="159.5" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="170.0" y1="160.3" x2="183.1" y2="174.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="167.8" y1="175.2" x2="181.0" y2="189.2" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="165.7" y1="190.0" x2="178.8" y2="204.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="163.6" y1="204.9" x2="176.7" y2="218.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="161.4" y1="219.7" x2="174.6" y2="233.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="159.3" y1="234.6" x2="172.4" y2="248.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="157.2" y1="249.4" x2="170.3" y2="263.4" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="155.0" y1="264.2" x2="168.2" y2="278.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="152.9" y1="279.1" x2="166.0" y2="293.1" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="150.8" y1="293.9" x2="163.9" y2="308.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="148.6" y1="308.8" x2="161.8" y2="322.8" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="146.5" y1="323.6" x2="159.6" y2="337.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="200.0" y1="4.0" x2="248.0" y2="338.0" stroke="url(#ropeBodyL)" stroke-width="15.0" stroke-linecap="round"/>
+        <line x1="195.8" y1="4.6" x2="243.8" y2="338.6" stroke="#8c5f28" stroke-width="2.4" stroke-linecap="round" opacity="0.5"/>
+        <line x1="204.2" y1="3.4" x2="252.2" y2="337.4" stroke="#f4d79a" stroke-width="2.2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="191.7" y1="-0.9" x2="208.3" y2="8.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="193.9" y1="14.0" x2="210.4" y2="23.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="196.0" y1="28.8" x2="212.5" y2="38.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="198.1" y1="43.7" x2="214.7" y2="53.4" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="200.3" y1="58.5" x2="216.8" y2="68.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="202.4" y1="73.4" x2="218.9" y2="83.1" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="204.5" y1="88.2" x2="221.1" y2="98.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="206.7" y1="103.1" x2="223.2" y2="112.8" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="208.8" y1="117.9" x2="225.3" y2="127.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="210.9" y1="132.8" x2="227.5" y2="142.5" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="213.1" y1="147.6" x2="229.6" y2="157.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="215.2" y1="162.4" x2="231.7" y2="172.2" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="217.3" y1="177.3" x2="233.9" y2="187.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="219.5" y1="192.1" x2="236.0" y2="201.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="221.6" y1="207.0" x2="238.1" y2="216.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="223.7" y1="221.8" x2="240.3" y2="231.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="225.9" y1="236.7" x2="242.4" y2="246.4" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="228.0" y1="251.5" x2="244.6" y2="261.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="230.1" y1="266.4" x2="246.7" y2="276.1" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="232.3" y1="281.2" x2="248.8" y2="291.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="234.4" y1="296.1" x2="251.0" y2="305.8" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="236.5" y1="310.9" x2="253.1" y2="320.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="238.7" y1="325.8" x2="255.2" y2="335.5" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <ellipse cx="200" cy="10" rx="16" ry="11" fill="url(#ropeBodyL)" stroke="#8c5f28" stroke-width="1.5"/>
+        <path d="M186 6 Q200 0 214 6" stroke="#8c5f28" stroke-width="1.6" fill="none" opacity="0.6"/>
+        <path d="M186 14 Q200 20 214 14" stroke="#8c5f28" stroke-width="1.6" fill="none" opacity="0.6"/>
+        <circle class="sandbag-ball" cx="200" cy="520" r="188" fill="url(#ballL)" stroke="#1f5aa6" stroke-width="16"/>
+      </svg>
+      <div class="sandbag-text" id="sandbagTextL">สารผสม</div>
+    </div>
+  </div>
+  <div class="sandbag-wrap right" id="sandbagWrapR">
+    <div class="sandbag-swing" id="sandbagSwingR">
+      <svg class="sandbag-img" id="sandbagImgR" viewBox="0 0 400 720" preserveAspectRatio="xMidYMin meet" aria-hidden="true">
+        <defs>
+          <linearGradient id="ropeBodyR" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#b07d36"/><stop offset="0.5" stop-color="#e3b76e"/><stop offset="1" stop-color="#a9762f"/>
+          </linearGradient>
+          <linearGradient id="ballR" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffd9cf"/><stop offset="1" stop-color="#e23a2c"/>
+          </linearGradient>
+        </defs>
+        <line x1="200.0" y1="4.0" x2="152.0" y2="338.0" stroke="url(#ropeBodyR)" stroke-width="15.0" stroke-linecap="round"/>
+        <line x1="195.8" y1="3.4" x2="147.8" y2="337.4" stroke="#8c5f28" stroke-width="2.4" stroke-linecap="round" opacity="0.5"/>
+        <line x1="204.2" y1="4.6" x2="156.2" y2="338.6" stroke="#f4d79a" stroke-width="2.2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="193.4" y1="-3.0" x2="206.6" y2="11.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="191.3" y1="11.8" x2="204.4" y2="25.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="189.2" y1="26.7" x2="202.3" y2="40.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="187.0" y1="41.5" x2="200.2" y2="55.5" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="184.9" y1="56.4" x2="198.0" y2="70.4" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="182.8" y1="71.2" x2="195.9" y2="85.2" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="180.6" y1="86.1" x2="193.8" y2="100.1" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="178.5" y1="100.9" x2="191.6" y2="114.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="176.4" y1="115.8" x2="189.5" y2="129.8" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="174.2" y1="130.6" x2="187.4" y2="144.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="172.1" y1="145.5" x2="185.2" y2="159.5" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="170.0" y1="160.3" x2="183.1" y2="174.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="167.8" y1="175.2" x2="181.0" y2="189.2" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="165.7" y1="190.0" x2="178.8" y2="204.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="163.6" y1="204.9" x2="176.7" y2="218.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="161.4" y1="219.7" x2="174.6" y2="233.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="159.3" y1="234.6" x2="172.4" y2="248.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="157.2" y1="249.4" x2="170.3" y2="263.4" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="155.0" y1="264.2" x2="168.2" y2="278.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="152.9" y1="279.1" x2="166.0" y2="293.1" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="150.8" y1="293.9" x2="163.9" y2="308.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="148.6" y1="308.8" x2="161.8" y2="322.8" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="146.5" y1="323.6" x2="159.6" y2="337.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="200.0" y1="4.0" x2="248.0" y2="338.0" stroke="url(#ropeBodyR)" stroke-width="15.0" stroke-linecap="round"/>
+        <line x1="195.8" y1="4.6" x2="243.8" y2="338.6" stroke="#8c5f28" stroke-width="2.4" stroke-linecap="round" opacity="0.5"/>
+        <line x1="204.2" y1="3.4" x2="252.2" y2="337.4" stroke="#f4d79a" stroke-width="2.2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="191.7" y1="-0.9" x2="208.3" y2="8.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="193.9" y1="14.0" x2="210.4" y2="23.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="196.0" y1="28.8" x2="212.5" y2="38.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="198.1" y1="43.7" x2="214.7" y2="53.4" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="200.3" y1="58.5" x2="216.8" y2="68.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="202.4" y1="73.4" x2="218.9" y2="83.1" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="204.5" y1="88.2" x2="221.1" y2="98.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="206.7" y1="103.1" x2="223.2" y2="112.8" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="208.8" y1="117.9" x2="225.3" y2="127.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="210.9" y1="132.8" x2="227.5" y2="142.5" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="213.1" y1="147.6" x2="229.6" y2="157.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="215.2" y1="162.4" x2="231.7" y2="172.2" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="217.3" y1="177.3" x2="233.9" y2="187.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="219.5" y1="192.1" x2="236.0" y2="201.9" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="221.6" y1="207.0" x2="238.1" y2="216.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="223.7" y1="221.8" x2="240.3" y2="231.6" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="225.9" y1="236.7" x2="242.4" y2="246.4" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="228.0" y1="251.5" x2="244.6" y2="261.3" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="230.1" y1="266.4" x2="246.7" y2="276.1" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="232.3" y1="281.2" x2="248.8" y2="291.0" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="234.4" y1="296.1" x2="251.0" y2="305.8" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="236.5" y1="310.9" x2="253.1" y2="320.7" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <line x1="238.7" y1="325.8" x2="255.2" y2="335.5" stroke="#9c6b2c" stroke-width="2.4" stroke-linecap="round" opacity="0.65"/>
+        <ellipse cx="200" cy="10" rx="16" ry="11" fill="url(#ropeBodyR)" stroke="#8c5f28" stroke-width="1.5"/>
+        <path d="M186 6 Q200 0 214 6" stroke="#8c5f28" stroke-width="1.6" fill="none" opacity="0.6"/>
+        <path d="M186 14 Q200 20 214 14" stroke="#8c5f28" stroke-width="1.6" fill="none" opacity="0.6"/>
+        <circle class="sandbag-ball" cx="200" cy="520" r="188" fill="url(#ballR)" stroke="#a8261b" stroke-width="16"/>
+      </svg>
+      <div class="sandbag-text" id="sandbagTextR">สารบริสุทธิ์</div>
+    </div>
+  </div>
+
+  <div class="field" id="field">
+    <canvas id="aimCanvas"></canvas>
+
+    <!-- ========= นักมวย (boxer1-4.png เป็นเฟรมอนิเมชัน) ========= -->
+    <div class="boxer" id="boxer">
+      <img class="boxer-img" id="boxerImg" src="image/boxer1.png" alt="" draggable="false">
+    </div>
+
+    <div class="footer-hint" id="hint">ชกกระสอบที่ "ตรงกับหัวข้อ" ก่อนหมดเวลา · ถ้าไม่ตรง ปล่อยให้หมดเวลา</div>
+  </div>
+
+  <!-- ========= แถบจับเวลา (ล่างสุด วิ่งซ้าย→ขวา) ========= -->
+</div>
+
+<!-- ========= Floating mute / fullscreen / camera ========= -->
+<div class="float-controls">
+  <button class="iconbtn" id="btnCam" title="เปิด/ปิดกล้องเล็งด้วยมือ" aria-pressed="false" aria-label="Camera">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+  </button>
+  <div class="vol-control" id="volControl">
+    <button class="iconbtn" id="btnMute" title="ปรับเสียง" aria-pressed="false" aria-label="Mute" aria-expanded="false">
+      <svg class="ic-on"  width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+      <svg class="ic-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+    </button>
+    <div class="vol-popup" id="volPopup" role="group" aria-label="ปรับระดับเสียง">
+      <button class="vol-mini" id="btnVolMute" type="button" title="ปิด/เปิดเสียง" aria-label="Toggle mute">
+        <svg class="ic-on"  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        <svg class="ic-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+      </button>
+      <input type="range" id="volSlider" min="0" max="100" value="60" step="1" aria-label="ระดับเสียง">
+    </div>
+  </div>
+  <button class="iconbtn" id="btnFs" title="เต็มจอ" aria-pressed="false" aria-label="Fullscreen">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V3h4"></path><path d="M21 7V3h-4"></path><path d="M3 17v4h4"></path><path d="M21 17v4h-4"></path></svg>
+  </button>
+</div>
+
+<!-- ========= Splash (หน้าแรกสุดเมื่อเปิดเกม) ========= -->
+<div class="overlay show" id="splashOverlay">
+  <div class="splash-wrap">
+    <img class="splash-banner" src="image/banner.png" alt="แบนเนอร์เกม">
+    <button class="splash-enter" id="btnEnterGame" type="button">เข้าสู่เกม</button>
+  </div>
+</div>
+
+<!-- ========= Menu / Start ========= -->
+<div class="overlay" id="menuOverlay">
+  <img class="menu-banner" src="image/banner.png" alt="แบนเนอร์เกม">
+  <div class="modal">
+    <div class="crest">
+      <svg viewBox="0 0 64 64" fill="none">
+        <circle cx="32" cy="32" r="26" fill="#fff" stroke="#e26a4f" stroke-width="3"></circle>
+        <circle cx="32" cy="32" r="18" fill="#5aa6c4"></circle>
+        <circle cx="32" cy="32" r="10" fill="#fff"></circle>
+        <circle cx="32" cy="32" r="4" fill="#e26a4f"></circle>
+        <path d="M8 32 L40 32" stroke="#2b2118" stroke-width="3" stroke-linecap="round"></path>
+        <polygon points="40,32 34,28 34,36" fill="#2b2118"></polygon>
+        <polygon points="8,32 13,29 13,35" fill="#e26a4f"></polygon>
+      </svg>
+    </div>
+    <h1>นักสู้วิทย์</h1>
+
+    <div style="text-align:left;">
+      <div class="topics" id="topicList"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn secondary" id="btnHow">วิธีเล่น</button>
+    </div>
+
+    <!-- หน้าต่างวิธีเล่น — auto-fit ข้อมูล วางกลาง modal -->
+    <div id="howBoxWrap" style="display:none;">
+      <div id="howBox">
+        <strong class="how-title">วิธีการเล่น</strong>
+        <p>ป้ายด้านบนจะแสดง<strong class="how-accent">ชนิดหรือลักษณะของสาร</strong> ผู้เล่นต้องชกกระสอบทรายฝั่งที่ตรงกับ<strong class="how-accent">ประเภทของสาร</strong>นั้น</p>
+        <ol>
+          <li>กระสอบ<strong class="how-accent">ฝั่งซ้าย (สีน้ำเงิน)</strong> หมายถึง สารผสม</li>
+          <li>กระสอบ<strong class="how-accent">ฝั่งขวา (สีแดง)</strong> หมายถึง สารบริสุทธิ์</li>
+          <li>ชกกระสอบให้ครบตามจำนวนครั้งที่กำหนด เพื่อทำให้กระสอบกระเด็นออกและตัดสินคำตอบ</li>
+        </ol>
+        <p><strong>โหมดปกติ:</strong> แตะหรือคลิกที่กระสอบฝั่งที่ต้องการ</p>
+        <p><strong>โหมดเปิดกล้อง 📷:</strong> ยืนให้กล้องจับภาพได้ทั้งตัว แล้วใช้มือชกไปยังกระสอบบนหน้าจอ</p>
+        <p class="how-foot">ผู้เล่นมี 10 หัวใจ ตอบให้ถูกต้องมากที่สุดภายในเวลา 120 วินาที</p>
+      </div>
+      <button type="button" id="btnHowClose" aria-label="เลือกด่าน">เลือกด่าน</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========= Pause ========= -->
+<div class="overlay" id="pauseOverlay">
+  <div class="modal">
+    <h1 style="margin-top:10px;">หยุดชั่วคราว</h1>
+    <p class="subtitle">พักก่อน… แล้วค่อยกลับมายิงต่อ</p>
+    <div class="btn-row">
+      <button class="btn" id="btnResume">เล่นต่อ</button>
+      <button class="btn secondary" id="btnRestartPause">เริ่มใหม่</button>
+      <button class="btn secondary" id="btnMenuPause">เมนู</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========= End / Result ========= -->
+<div class="overlay" id="endOverlay">
+  <div class="modal">
+    <div class="crest" id="endCrest">
+      <svg viewBox="0 0 64 64" fill="none">
+        <path d="M19 50 C12 45 12 24 21 17 C29 11 45 13 49 24 C51 31 51 43 47 50 Z" fill="#d8362c" stroke="#2b2118" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M19 31 C11 30 9 40 16 44 C20 46 23 43 22 38 Z" fill="#d8362c" stroke="#2b2118" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M30 19 C27 28 27 40 30 48" stroke="#7a140f" stroke-width="2.2" opacity="0.55"/>
+        <rect x="18" y="48" width="30" height="12" rx="5" fill="#2f7ed4" stroke="#2b2118" stroke-width="2.4"/>
+        <rect x="22" y="51" width="22" height="3.2" rx="1.6" fill="#ffffff" opacity="0.5"/>
+      </svg>
+    </div>
+    <h1 id="endTitle">เก่งมาก!</h1>
+    <p class="subtitle" id="endSubtitle">สรุปผลการเล่น</p>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="num" id="endScore">0</div><div class="lbl">คะแนน</div></div>
+      <div class="stat"><div class="num" id="endHits">0</div><div class="lbl">ตอบถูก</div></div>
+      <div class="stat"><div class="num" id="endAcc">0%</div><div class="lbl">แม่นยำ</div></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="btnPlayAgain">เล่นอีกครั้ง</button>
+      <button class="btn secondary" id="btnMenuEnd">กลับเมนู</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========= Preload ========= -->
+<div class="overlay" id="preloadOverlay">
+  <div class="pl-wrap">
+    <h2 id="preloadTitle">กำลังเตรียมสังเวียน…</h2>
+    <div id="preloadBarWrap"><div id="preloadBar"></div></div>
+    <div id="preloadPercent">0%</div>
+  </div>
+</div>
+
+<!-- ========= Guide (วิธีการยิงธนูโหมดกล้อง) ========= -->
+<div class="overlay" id="guideOverlay">
+  <div class="guide-wrap">
+    <h2 class="guide-title">วิธีเล่นโหมดเปิดกล้อง 🥊</h2>
+    <div class="guide-card">
+      <ol>
+        <li>ยืนให้กล้องเห็นตัว ตั้งแต่ศีรษะถึงเอว</li>
+        <li>ดูหัวข้อบน <b>ป้ายไม้</b> และข้อความบน <b>กระสอบทราย</b></li>
+        <li>ถ้าข้อความ <b>ตรงหัวข้อ</b> → ใช้มือ <b>ชกไปที่กระสอบ</b> ให้ครบจำนวน (แค่สัมผัสก็นับ)</li>
+        <li>ถ้า <b>ไม่ตรงหัวข้อ</b> → อย่าชก ปล่อยให้หมดเวลา</li>
+        <li>ชกแต่ละครั้งต้องดึงมือกลับก่อน แล้วชกใหม่</li>
+      </ol>
+    </div>
+    <div class="guide-actions">
+      <button class="btn secondary btn-cam-icon" id="btnGuideCamera" type="button" aria-label="เปิด/ปิดโหมดกล้อง" title="เปิด/ปิดโหมดกล้อง">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+      </button>
+      <button class="btn" id="btnGuideStart" type="button">เริ่มเกม</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========= Countdown ========= -->
+<div class="overlay" id="countdownOverlay">
+  <div class="cd-num" id="countdownNum">3</div>
+</div>
+
+<!-- ========= Audio (มี fallback — ถ้าไม่มีไฟล์ก็เงียบไม่พัง) ========= -->
+<div id="wrongFlash" aria-hidden="true"></div>
+<audio id="bgm" loop preload="auto"></audio>
+<audio id="sfxHit" preload="auto"></audio>
+<audio id="sfxWrong" preload="auto"></audio>
+<audio id="sfxShoot" preload="auto"></audio>
+<audio id="sfxWin" preload="auto"></audio>
+<audio id="sfxVic" preload="auto"></audio>
+<audio id="sfxSelect" preload="auto"></audio>
+
+<script>
+/* =======================================================================
+ *  ARCHERY QUIZ — standalone build (game1.html)
+ *  เพิ่ม: preload, countdown, mute/fs/cam, audio mgr, visibilitychange,
+ *         hardCleanup, ระบบกล้องเล็งด้วยท่า "ชี้มือ" (chest = จุดหมุน)
+ * =====================================================================*/
+
+/* ---------- 1. DATA — การเปลี่ยนแปลงทางกายภาพ/เคมี (วิทย์ ป.5) ----------
+ * อ้างอิงตัวชี้วัด ว 2.1 ป.5 (สสวท./อจท.):
+ *  - การเปลี่ยนแปลงทางกายภาพ = สารยังเป็นสารเดิม (เปลี่ยนสถานะ/ละลาย/รูปร่าง)
+ *  - การเปลี่ยนแปลงทางเคมี = เกิดสารใหม่ สังเกตจาก กลิ่นเปลี่ยน ฟองแก๊ส
+ *    เปลี่ยนสีถาวร ตะกอน อุณหภูมิเปลี่ยน แสง/เสียง
+ *
+ * โครงสร้างด่าน: sign = หัวข้อบนป้ายไม้
+ *   correct[] = ข้อความที่ "ตรงหัวข้อ" (ต้องชก)
+ *   decoy[]   = ตัวหลอก "ไม่ตรงหัวข้อ" (ปล่อยให้หมดเวลา)
+ */
+const TOPICS = {
+  // ── ด่าน 1: ชนิดของสาร — กระสอบ: ซ้าย=สารผสม / ขวา=สารบริสุทธิ์ ──
+  // correct[] = สารบริสุทธิ์ (ตอบขวา) , decoy[] = สารผสม (ตอบซ้าย)
+  chem: {
+    title:"ด่าน 1 · ชนิดของสาร",
+    sign:"ชนิดของสาร",
+    emoji:"⚗️",
+    correct:[   // สารบริสุทธิ์ (ธาตุ/สารประกอบ — มีสารชนิดเดียว) → ตอบ "สารบริสุทธิ์" (ขวา)
+      "น้ำกลั่น","ทองคำบริสุทธิ์","เงินบริสุทธิ์","ทองแดง","เหล็กบริสุทธิ์",
+      "อะลูมิเนียม","สังกะสี","ดีบุก","ปรอท","คาร์บอน",
+      "กำมะถัน","เพชร","แกรไฟต์","แก๊สออกซิเจน","แก๊สไฮโดรเจน",
+      "แก๊สไนโตรเจน","แก๊สฮีเลียม","แก๊สคาร์บอนไดออกไซด์","เกลือแกง","น้ำตาลทรายบริสุทธิ์",
+      "น้ำแข็งแห้ง","จุนสี","ด่างทับทิม","เอทานอลบริสุทธิ์"
+    ],
+    decoy:[     // สารผสม (มีหลายสารปนกัน) → ตอบ "สารผสม" (ซ้าย)
+      "น้ำเกลือ","น้ำหวาน","น้ำเชื่อม","น้ำส้มสายชู","น้ำอัดลม",
+      "น้ำโซดา","น้ำชา","กาแฟ","น้ำมะนาว","น้ำโคลน",
+      "น้ำคลอง","นมสด","น้ำสบู่","น้ำผลไม้ปั่น","อากาศ",
+      "น้ำทะเล","ดิน","หินแกรนิต","น้ำมันพืช","น้ำปลา",
+      "ทองเหลือง","สแตนเลส","ทองรูปพรรณ","สลัดผัก","น้ำพริก","เลือด"
+    ],
+  },
+
+  // ── ด่าน 2: ลักษณะของสาร — กระสอบเหมือนเดิม (ซ้าย=สารผสม / ขวา=สารบริสุทธิ์) ──
+  phys: {
+    title:"ด่าน 2 · ลักษณะของสาร",
+    sign:"ลักษณะของสาร",
+    emoji:"🔍",
+    correct:[   // ลักษณะของสารบริสุทธิ์ → ตอบ "สารบริสุทธิ์" (ขวา)
+      "ประกอบด้วยสารเพียงชนิดเดียว","มีจุดเดือดคงที่","มีจุดหลอมเหลวคงที่",
+      "มีความหนาแน่นคงที่","มีสมบัติเฉพาะตัวแน่นอน","เป็นธาตุหรือสารประกอบ",
+      "มีองค์ประกอบเดียวทั้งก้อน","แยกด้วยวิธีกายภาพไม่ได้","จุดเดือดไม่เปลี่ยนขณะเดือด"
+    ],
+    decoy:[     // ลักษณะของสารผสม → ตอบ "สารผสม" (ซ้าย)
+      "ประกอบด้วยสารตั้งแต่ 2 ชนิด","มีจุดเดือดไม่คงที่","มีจุดหลอมเหลวไม่คงที่",
+      "สัดส่วนของสารไม่แน่นอน","แยกด้วยวิธีกายภาพได้","สมบัติขึ้นกับสัดส่วนการผสม",
+      "เกิดจากการผสมโดยไม่เกิดสารใหม่","อาจเป็นเนื้อเดียวหรือเนื้อผสม","กรองหรือกลั่นแยกได้"
+    ],
+  },
+};
+
+/* ---------- 2. STATE ---------- */
+const G = {
+  topicKey:"chem",
+  state:"menu",
+  running:false, paused:false,
+  score:0, hits:0, shots:0,        // shots = จำนวนรอบที่ผ่าน (ใช้คิด % แม่นยำ)
+  hearts:10, maxHearts:10,
+  time:120, timerId:null,
+  // ── สถานะรอบปัจจุบัน (กระสอบทราย 1 ใบ) ──
+  round:null,                      // { text, isCorrect, required, hits }
+  roundActive:false,               // กำลังเปิดรับการชกอยู่ไหม
+  roundStart:0,                    // performance.now() ตอนกระสอบลงมา
+  roundDur:5000,                   // หลอดเวลา 5 วินาที/รอบ
+  ringLen:0,                       // ความยาวเส้นรอบป้าย (getTotalLength)
+  resolving:false,                 // กันเรียกตัดสินซ้ำระหว่าง animation
+  lastWord:null,
+  drag:{ active:false },
+  lastPunch:0,                     // กัน double-trigger
+  rafId:null, prevT:0,
+  cameraOn:false,
+  camHands:[],                     // [{x,y}] ตำแหน่งหมัด(ข้อมือ)ในจอ จาก pose
+  camHandOverL:[false,false], camHandOverR:[false,false],  // edge-trigger ต่อมือ/ต่อฝั่ง
+  cameraInZone:true,
+  countdownTimer:null,
+  startBusy:false,
+};
+
+/* ---------- 3. UI refs ---------- */
+const $ = (s)=>document.querySelector(s);
+const UI = {
+  field:$("#field"), canvas:$("#aimCanvas"),
+  boxer:$("#boxer"), boxerImg:$("#boxerImg"),
+  signWrap:$("#signWrap"), signTitle:$("#signTitle"),
+  sandbagWrapL:$("#sandbagWrapL"), sandbagSwingL:$("#sandbagSwingL"), sandbagImgL:$("#sandbagImgL"),
+  sandbagWrapR:$("#sandbagWrapR"), sandbagSwingR:$("#sandbagSwingR"), sandbagImgR:$("#sandbagImgR"),
+  hudScore:$("#hudScore"), hudTime:$("#hudTime"), hudStreak:$("#hudStreak"),
+  hint:$("#hint"),
+  menu:$("#menuOverlay"), pause:$("#pauseOverlay"), end:$("#endOverlay"),
+  preload:$("#preloadOverlay"), preloadBar:$("#preloadBar"),
+  preloadPercent:$("#preloadPercent"), preloadTitle:$("#preloadTitle"),
+  guide:$("#guideOverlay"),
+  countdown:$("#countdownOverlay"), countdownNum:$("#countdownNum"),
+  endScore:$("#endScore"), endHits:$("#endHits"), endAcc:$("#endAcc"),
+  endTitle:$("#endTitle"), topicList:$("#topicList"),
+  btnCam:$("#btnCam"), btnMute:$("#btnMute"), btnFs:$("#btnFs"),
+};
+const ctx = UI.canvas.getContext("2d");
+
+function showOverlay(el){ el.classList.add("show"); }
+function hideOverlay(el){ el.classList.remove("show"); }
+function setHUD(){
+  UI.hudScore.textContent = G.score;
+  UI.hudTime.textContent  = G.time;
+  UI.hudStreak.textContent = G.hearts;
+}
+
+/* ---------- 4. AUDIO MANAGER ---------- */
+const AUDIO_SRC = {
+  bgm:        "image/bgm.mp3",      // เพลงพื้นหลัง — เริ่มเล่นตอนกดเข้าสู่เกม
+  sfxHit:     "image/hit.mp3",      // เสียงเมื่อลูกธนูโดนเป้า (ทั้งถูกและผิด)
+  sfxWrong:   "image/wrong.mp3",    // เสียงตอบผิด (เล่นต่อจากเสียงชก)
+  sfxShoot:   "image/shot.mp3",     // เสียงตอนปล่อยลูกธนู (ทั้งโหมดปกติและกล้อง)
+  sfxVic:     "image/vic.mp3",      // เสียงตอนยิงถูก (เล่นหลัง sfxHit)
+  sfxWin:     "image/win2.mp3",     // เสียงตอนจบเกม
+  sfxSelect:  "20 เกม-คำศัพท์ vocab happy learn ป.4-6/image/select.mp3",
+};
+const VOL = { bgm:0.35, hit:0.7, wrong:0.7, shoot:0.6, vic:0.8, win:0.85, select:0.6 };
+const AudioMgr = (()=>{
+  const els = {};
+  let muted = false;
+  let attached = false;
+  let masterVol = 1.0;     // volume 0..1 (คูณกับ VOL ของแต่ละเสียง)
+  let preloadDone = false; // ✓ โหลดเสียงครบครั้งแรกแล้ว — ไม่ต้องโหลดอีก
+  function attachSrc(){
+    if (attached) return;
+    attached = true;
+    for (const key in AUDIO_SRC){
+      const el = document.getElementById(key);
+      if (!el) continue;
+      el.src = AUDIO_SRC[key];
+      el.addEventListener("error", ()=>{}, {once:true});
+      els[key] = el;
+    }
+    if (els.bgm) els.bgm.volume = VOL.bgm * masterVol;
+  }
+  function preloadAll(onProgress){
+    attachSrc();
+    // ถ้าเคยโหลดครบแล้ว → resolve ทันที 100% (ไม่โหลดซ้ำ)
+    if (preloadDone){
+      onProgress?.(1, 1);
+      return Promise.resolve();
+    }
+    const list = Object.keys(els);
+    let done = 0;
+    return Promise.all(list.map(k=> new Promise(res=>{
+      const el = els[k];
+      let settled = false;
+      const fin = ()=>{ if(settled) return; settled = true; done++; onProgress?.(done, list.length); res(); };
+      el.addEventListener("canplaythrough", fin, {once:true});
+      el.addEventListener("loadeddata",     fin, {once:true});
+      el.addEventListener("error",          fin, {once:true});
+      try{ el.load(); }catch(_){}
+      setTimeout(fin, 2500);
+    }))).then(()=>{ preloadDone = true; });
+  }
+  function isPreloaded(){ return preloadDone; }
+  function play(key, vol){
+    if (muted) return;       // mute ตอนนี้ครอบคลุมทั้งหมด ไม่ใช่แค่ bgm
+    const el = els[key];
+    if (!el || !el.src) return;
+    try{
+      if (key === "bgm"){
+        el.volume = VOL.bgm * masterVol;
+        el.play()?.catch(()=>{});
+      } else {
+        const n = el.cloneNode();
+        const baseVol = (typeof vol === "number") ? vol : (VOL[key.replace("sfx","").toLowerCase()] ?? 0.7);
+        n.volume = baseVol * masterVol;
+        n.play()?.catch(()=>{});
+      }
+    }catch(_){}
+  }
+  function stop(key){
+    const el = els[key];
+    if (!el) return;
+    try{ el.pause(); el.currentTime = 0; }catch(_){}
+  }
+  function setMuted(m){
+    muted = !!m;
+    if (els.bgm) els.bgm.muted = muted;
+    // เมื่อ unmute: ถ้า BGM ถูก pause อยู่ (เพราะเคยถูกหยุด/โดน browser pause)
+    // ให้ลอง resume กลับมาเล่นต่อ — กันบั๊กที่กด mute แล้ว unmute แล้วเพลงพื้นหลังหาย
+    if (!muted && els.bgm && els.bgm.src && els.bgm.paused){
+      try{ els.bgm.play()?.catch(()=>{}); }catch(_){}
+    }
+  }
+  function isMuted(){ return muted; }
+  function setVolume(v){
+    masterVol = Math.max(0, Math.min(1, v));
+    if (els.bgm) els.bgm.volume = VOL.bgm * masterVol;
+  }
+  function getVolume(){ return masterVol; }
+  return { attachSrc, preloadAll, isPreloaded, play, stop, setMuted, isMuted, setVolume, getVolume };
+})();
+
+/* ---------- 5. CANVAS / FIT ---------- */
+function fitCanvas(){
+  const r = UI.field.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  UI.canvas.width  = r.width  * dpr;
+  UI.canvas.height = r.height * dpr;
+  UI.canvas.style.width  = r.width + "px";
+  UI.canvas.style.height = r.height + "px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", fitCanvas);
+window.addEventListener("orientationchange", fitCanvas);
+
+/* ---------- 6. EFFECTS ---------- */
+function flashFloater(x, y, text, good){
+  const el = document.createElement("div");
+  el.className = "floater " + (good ? "good" : "bad");
+  el.textContent = text;
+  el.style.left = x + "px"; el.style.top = y + "px";
+  UI.field.appendChild(el);
+  setTimeout(()=>el.remove(), 1100);
+}
+
+/* ============================================================
+ *  Render helpers (โหมดเกมมวย)
+ * ========================================================== */
+
+/* แถบเวลา — วิ่งจากซ้าย→ขวาตามเวลารอบปัจจุบัน */
+/* ตำแหน่งกล่องกระสอบในจอ (viewport px) — ใช้เช็คการชกโหมดกล้อง */
+function sandbagScreenRect(side){
+  const el = (side==='L') ? UI.sandbagImgL : UI.sandbagImgR;
+  if (!el) return null;
+  return el.getBoundingClientRect();
+}
+function swingOf(side){ return (side==='L') ? UI.sandbagSwingL : UI.sandbagSwingR; }
+
+function sparks(x, y){
+  const colors = ["#f3b13f","#e26a4f","#5aa6c4","#7bb274","#ffffff"];
+  for(let i=0;i<10;i++){
+    const s = document.createElement("div");
+    s.className = "spark";
+    s.style.left = x + "px"; s.style.top = y + "px";
+    s.style.background = colors[i%colors.length];
+    const ang = Math.random()*Math.PI*2;
+    const dist = 60 + Math.random()*60;
+    s.style.setProperty("--dx", Math.cos(ang)*dist + "px");
+    s.style.setProperty("--dy", Math.sin(ang)*dist + "px");
+    UI.field.appendChild(s);
+    setTimeout(()=>s.remove(), 850);
+  }
+}
+function shakeField(){
+  UI.field.animate(
+    [{transform:"translate(0,0)"},{transform:"translate(-6px,3px)"},{transform:"translate(5px,-2px)"},{transform:"translate(0,0)"}],
+    {duration:240, easing:"ease-out"}
+  );
+}
+
+/* ---------- 7. INPUT — แตะ/คลิกที่กระสอบ = ชก (โหมดปกติ) ---------- */
+function onSandbagPointer(side, e){
+  if(!G.running || G.paused) return;
+  if(!G.roundActive) return;
+  if(G.cameraOn) return;              // โหมดกล้องใช้มือจริงแทน
+  if(e && e.cancelable) e.preventDefault();
+  registerPunch(side);
+}
+
+/* ---------- 8. POSE API (โหมดกล้อง — มือจริงชกกระสอบ) ---------- */
+/* pose script ส่งตำแหน่งข้อมือทั้งสองข้าง (viewport px) มาที่นี่ */
+window.__poseHands = function(hands){
+  G.camHands = Array.isArray(hands) ? hands : [];
+};
+/* ความเข้ากันได้ย้อนหลัง — ตัวเดิมอาจยังเรียก __poseAim/__poseRelease */
+window.__poseAim = function(){};
+window.__poseRelease = function(){ return false; };
+window.__poseHead = function(){};
+
+/* ตรวจว่ามือจริงสัมผัสกระสอบหรือไม่ (edge-trigger ต่อมือ) */
+function checkCameraPunch(){
+  if(!G.cameraOn || !G.running || G.paused || !G.roundActive) return;
+  const hands = G.camHands || [];
+  for(const side of ['L','R']){
+    const r = sandbagScreenRect(side); if(!r) continue;
+    const pad = Math.max(20, r.width*0.18);
+    const x0=r.left-pad, x1=r.right+pad, y0=r.top-pad, y1=r.bottom+pad;
+    const over = (side==='L') ? G.camHandOverL : G.camHandOverR;
+    for(let i=0;i<2;i++){
+      const h = hands[i];
+      const isOver = !!(h && h.x>=x0 && h.x<=x1 && h.y>=y0 && h.y<=y1);
+      if(isOver && !over[i]){ over[i]=true; registerPunch(side, h); }
+      else if(!isOver){ over[i]=false; }
+    }
+  }
+}
+
+/* ---------- 9. PUNCH — ลงหมัด 1 ครั้ง ---------- */
+function registerPunch(side, handPx){
+  if(!G.running || G.paused || !G.roundActive || G.resolving) return;
+  if(side!=='L' && side!=='R') return;
+  const now = performance.now();
+  if(now - G.lastPunch < 120) return;     // กันรัวเกิน
+  G.lastPunch = now;
+
+  // นักมวยหันไปทางฝั่งที่ชก (ซ้าย=พลิกกลับด้าน) แล้วค้างไว้จนกว่าจะชกฝั่งใหม่
+  if(UI.boxerImg){
+    UI.boxerImg.classList.toggle('face-left', side==='L');
+  }
+  // อนิเมชันนักมวยชก
+  if(!G.cameraOn && UI.boxer){
+    UI.boxer.classList.remove('lunge');
+    void UI.boxer.offsetWidth;
+    UI.boxer.classList.add('lunge');
+    setTimeout(()=>UI.boxer.classList.remove('lunge'), 280);
+    playBoxerFrames();
+  }
+
+  const r = G.round;
+  if(!r) return;
+
+  // เปลี่ยนฝั่งที่ชก = เริ่มนับใหม่
+  if(r.side !== side){ r.side = side; r.hits = 0; }
+
+  bagShake(side);
+  AudioMgr.play("sfxHit");
+
+  r.hits++;
+  punchSpark(side, handPx);
+  if(r.hits >= r.required){
+    resolveRound(side === r.correctSide, side);
+  }
+}
+
+/* เล่นเฟรมนักมวย boxer2→3→4 แล้วกลับ boxer1 */
+let _boxerFrameTimers=[];
+function playBoxerFrames(){
+  if(!UI.boxerImg) return;
+  _boxerFrameTimers.forEach(clearTimeout); _boxerFrameTimers=[];
+  // 2 รูป: boxer1 (ตั้งการ์ด) -> boxer2 (ออกหมัด) -> boxer1
+  UI.boxerImg.src = "image/boxer2.png";
+  _boxerFrameTimers.push(setTimeout(()=>{
+    UI.boxerImg.src = "image/boxer1.png";
+  }, 150));
+}
+
+/* เอฟเฟกต์ประกายตอนชกโดน */
+function punchSpark(side, handPx){
+  const r = sandbagScreenRect(side); if(!r) return;
+  const fr = UI.field.getBoundingClientRect();
+  let x,y;
+  if(handPx){ x=handPx.x-fr.left; y=handPx.y-fr.top; }
+  else {
+    // ขอบด้านในของวงกระสอบ (ด้านที่หันเข้ากลางจอ)
+    const ballY = r.top-fr.top + r.height*0.55;   // กลางวงนิดล่าง
+    if(side==='L'){ x=r.right-fr.left - r.width*0.08; }   // ซ้าย → ขอบขวาวง
+    else          { x=r.left-fr.left  + r.width*0.08; }   // ขวา  → ขอบซ้ายวง
+    y = ballY;
+  }
+  sparks(x,y);
+  const fx=document.createElement('div');
+  fx.className='punch-fx'; fx.textContent='POW!';
+  fx.style.left=x+'px'; fx.style.top=y+'px';
+  UI.field.appendChild(fx);
+  setTimeout(()=>fx.remove(),560);
+}
+
+function bagShake(side){
+  const sw = swingOf(side); if(!sw) return;
+  const cls = (side==='L') ? 'hitshake-left' : 'hitshake';
+  sw.classList.remove('hitshake','hitshake-left');
+  void sw.offsetWidth;
+  sw.classList.add(cls);
+}
+function flashWrongScreen(){
+  const f=document.getElementById('wrongFlash'); if(!f) return;
+  f.classList.remove('show'); void f.offsetWidth; f.classList.add('show');
+  setTimeout(()=>f.classList.remove('show'), 600);
+}
+
+function updateHitBadge(){
+  // ลบตัวเลขจำนวนที่ต้องชกออกแล้ว — ไม่แสดงป้ายใดๆ
+  if(UI.hitBadge) UI.hitBadge.classList.remove('show');
+}
+
+/* ---------- 10. ตัดสินผลรอบ ---------- */
+function resolveRound(correct, side){
+  if(G.resolving) return;
+  G.resolving = true;
+  G.roundActive = false;
+  G.shots++;
+
+  // กระสอบที่ถูกชกจน knockout จะปลิวออก (ฝั่งซ้าย→ซ้าย, ขวา→ขวา)
+  if(side){
+    const sw = swingOf(side);
+    if(sw) sw.classList.add(side==='L' ? 'fly-out-left' : 'fly-out');
+    // อีกฝั่ง (ที่ไม่ได้เลือก) = เฟดหายไป
+    const otherSw = swingOf(side==='L' ? 'R' : 'L');
+    if(otherSw) otherSw.classList.add('fade-out');
+  } else {
+    // หมดเวลา/ไม่ได้เลือก = เฟดทั้งสองฝั่ง
+    ['L','R'].forEach(sd=>{ const sw=swingOf(sd); if(sw) sw.classList.add('fade-out'); });
+  }
+
+  if(correct){
+    G.score += 10; G.hits++;
+    UI.signWrap.classList.add('flash-correct');
+    setTimeout(()=>UI.signWrap.classList.remove('flash-correct'),550);
+    // เสียงชกเล่นไปแล้วใน registerPunch — ที่นี่เล่นเฉพาะเสียงชนะ (กันเสียงชกลั่นซ้ำ)
+    setTimeout(()=>AudioMgr.play("sfxVic"), 140);
+  } else {
+    G.hearts = Math.max(0, G.hearts-1);
+    flashWrongScreen();
+    UI.signWrap.classList.add('flash-wrong');
+    setTimeout(()=>UI.signWrap.classList.remove('flash-wrong'),550);
+    const fr=UI.field.getBoundingClientRect();
+    const r = side ? sandbagScreenRect(side) : null;
+    if(r) flashFloater(r.left-fr.left+r.width*0.5, r.top-fr.top+r.height*0.3, "−1 ❤", false);
+    else  flashFloater(fr.width*0.5, fr.height*0.4, "−1 ❤", false);
+    shakeField();
+    setTimeout(()=>AudioMgr.play("sfxWrong"), 130);
+    const pill=document.querySelector(".pill.streak");
+    if(pill){ pill.classList.add("hurt"); setTimeout(()=>pill.classList.remove("hurt"),500); }
+  }
+  setHUD();
+
+  if(!correct && G.hearts<=0){
+    setTimeout(()=>{ if(G.running) endGame("nohearts"); }, 700);
+    return;
+  }
+  const delay = correct ? 1700 : 1600;   // เว้นจอว่างให้เห็นชัดก่อนข้อใหม่
+  setTimeout(()=>{ if(G.running) nextRound(); }, delay);
+}
+
+/* ---------- 11. รอบใหม่ (กระสอบ 1 ใบ) ---------- */
+function shuffle(arr){
+  const a=arr.slice();
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+function resetBag(side){
+  const sw = swingOf(side); if(!sw) return;
+  sw.classList.remove('fly-out','fly-out-left','fade-out','hitshake','hitshake-left','drop-in');
+  void sw.offsetWidth;
+  sw.classList.add('drop-in');
+}
+function nextRound(){
+  const topic = TOPICS[G.topicKey];
+  if(!topic) return;
+  // ด่าน chem: correct[]=เหตุการณ์เคมี, decoy[]=เหตุการณ์กายภาพ
+  // ด่าน phys: correct[]=ลักษณะกายภาพ,  decoy[]=ลักษณะเคมี
+  // correct[] = สารบริสุทธิ์ (ตอบขวา R) , decoy[] = สารผสม (ตอบซ้าย L) — เหมือนกันทั้งสองด่าน
+  let arr, ansSide;
+  if(Math.random() < 0.5 && topic.correct.length){ arr=topic.correct; ansSide='R'; }
+  else if(topic.decoy.length){ arr=topic.decoy; ansSide='L'; }
+  else { arr=topic.correct; ansSide='R'; }
+
+  let text = arr[Math.floor(Math.random()*arr.length)];
+  let tries=0;
+  while(text===G.lastWord && arr.length>1 && tries<8){
+    text = arr[Math.floor(Math.random()*arr.length)]; tries++;
+  }
+  G.lastWord = text;
+
+  const correctSide = ansSide;   // สารบริสุทธิ์=ขวา(แดง), สารผสม=ซ้าย(น้ำเงิน)
+  const required = 2 + Math.floor(Math.random()*2);   // 2-3 ครั้ง (ขั้นต่ำ 2)
+  G.round = { text, correctSide, required, hits:0, side:null };
+  G.resolving = false;
+
+  // ป้ายไม้แสดงเหตุการณ์การเปลี่ยนแปลง
+  if(UI.signTitle) UI.signTitle.textContent = text;
+
+  // กระสอบ 2 ฝั่ง เลื่อนลงมาใหม่
+  resetBag('L'); resetBag('R');
+  if(UI.boxerImg) UI.boxerImg.src = "image/boxer1.png";
+
+  G.camHandOverL=[false,false]; G.camHandOverR=[false,false];
+  G.roundStart = performance.now();
+  G.roundActive = true;
+}
+
+/* ---------- 12. GAME LOOP / TIMER ---------- */
+function loop(t){
+  if(!G.running){ G.rafId=null; return; }
+  G.prevT = t;
+  if(!G.paused){
+    checkCameraPunch();
+  }
+  G.rafId = requestAnimationFrame(loop);
+}
+function startTimer(){
+  clearInterval(G.timerId);
+  G.timerId = setInterval(()=>{
+    if(G.paused) return;
+    G.time--;
+    setHUD();
+    if(G.time <= 0) endGame("timeout");
+  }, 1000);
+}
+
+/* ---------- 13. PRELOAD + COUNTDOWN + START ---------- */
+/* ---------- BACKGROUND (สุ่ม bg1-bg4.png ขณะเล่น) ---------- */
+function applyRandomGameBackground(){
+  const n = 1 + Math.floor(Math.random() * 4);     // 1..4
+  const app = document.getElementById("app");
+  if (app){
+    app.style.backgroundImage = `url("image/bg${n}.png")`;
+  }
+  document.body.classList.add("in-game");
+  return n;
+}
+// เก็บแคชรูป bg ที่เคยโหลดสำเร็จแล้ว — ไม่ต้องโหลดซ้ำ
+const _bgImageCache = new Set();
+const _imgPreloaded = new Set();
+function preloadOneImage(src){
+  if(_imgPreloaded.has(src)) return Promise.resolve();
+  return new Promise(res=>{ const im=new Image(); im.onload=()=>{_imgPreloaded.add(src);res();}; im.onerror=()=>res(); im.src=src; });
+}
+function preloadGameImages(){
+  const list=["image/wood.png","image/boxer1.png","image/boxer2.png"];
+  return Promise.all(list.map(preloadOneImage));
+}
+function preloadBgImage(n){
+  // ถ้าเคยโหลดสำเร็จแล้ว → resolve ทันที (browser HTTP cache ก็มีอยู่แล้ว แต่ skip overhead)
+  if (_bgImageCache.has(n)) return Promise.resolve();
+  // โหลดรูป bg ล่วงหน้าให้พร้อมแสดงทันทีเมื่อ apply
+  return new Promise(resolve=>{
+    const img = new Image();
+    img.onload = ()=>{ _bgImageCache.add(n); resolve(); };
+    img.onerror = ()=>resolve();
+    img.src = `image/bg${n}.png`;
+  });
+}
+function isBgImageCached(n){ return _bgImageCache.has(n); }
+function clearGameBackground(){
+  const app = document.getElementById("app");
+  if (app){
+    app.style.backgroundImage = "";
+  }
+  document.body.classList.remove("in-game");
+}
+
+async function startSequence(){
+  if (G.startBusy) return;
+  G.startBusy = true;
+  AudioMgr.play("sfxSelect");
+
+  AudioMgr.attachSrc();
+
+  // เลือก bg ของด่าน
+  const bgN = 1 + Math.floor(Math.random() * 4);
+
+  // ถ้าทุกอย่างโหลดเสร็จแล้วจากครั้งก่อน (เสียง + รูป bg ตัวที่เลือก) — ข้ามหน้า preload เลย
+  const everythingCached = AudioMgr.isPreloaded() && isBgImageCached(bgN);
+
+  if (everythingCached){
+    hideOverlay(UI.menu);
+    hideOverlay(UI.end);
+    // ไม่โชว์ preloadOverlay เลย — ข้ามไปขั้น apply bg + guide ทันที
+  } else {
+    showOverlay(UI.preload);
+    hideOverlay(UI.menu);
+    hideOverlay(UI.end);
+    UI.preloadBar.style.width = "0%";
+    UI.preloadPercent.textContent = "0%";
+    UI.preloadTitle.textContent = "กำลังเตรียมสังเวียน…";
+
+    // preload รูปคู่ไปกับเสียง
+    await Promise.all([
+      AudioMgr.preloadAll((done,total)=>{
+        const pct = Math.round(done/Math.max(1,total) * 100);
+        UI.preloadBar.style.width = pct + "%";
+        UI.preloadPercent.textContent = pct + "%";
+      }),
+      preloadBgImage(bgN),
+      preloadGameImages(),
+    ]);
+
+    UI.preloadBar.style.width = "100%";
+    UI.preloadPercent.textContent = "100%";
+    await new Promise(r=>setTimeout(r, 200));
+    hideOverlay(UI.preload);
+  }
+
+  // apply bg ของด่าน ทันที — guide + countdown + เกม จะเห็น bg เดียวกัน
+  const app = document.getElementById("app");
+  if (app) app.style.backgroundImage = `url("image/bg${bgN}.png")`;
+  document.body.classList.add("in-game");
+  G.selectedBgN = bgN;          // เก็บไว้ใช้ใน realStartGame
+
+  // โชว์หน้า guide ก่อน — รอผู้เล่นกด "เริ่มเกม"
+  await showGuideAndWait();
+
+  document.body.classList.add("pre-game");   // ซ่อนกระสอบ/นักมวย/ป้าย จนกว่านับถอยหลังจะจบ
+  await runCountdown();
+  realStartGame();
+  G.startBusy = false;
+}
+
+/* รอผู้เล่นกด "เริ่มเกม" ในหน้า guide — return Promise ที่จะ resolve เมื่อกด */
+function showGuideAndWait(){
+  return new Promise(resolve=>{
+    syncGuideCameraButton();
+    showOverlay(UI.guide);
+    const btnStart  = document.getElementById("btnGuideStart");
+    const btnCamera = document.getElementById("btnGuideCamera");
+    const onStart = ()=>{
+      btnStart.removeEventListener("click", onStart);
+      btnCamera?.removeEventListener("click", onCamera);
+      hideOverlay(UI.guide);
+      AudioMgr.play("sfxSelect");
+      resolve();
+    };
+    const onCamera = ()=>{
+      AudioMgr.play("sfxSelect");
+      if (typeof window.__toggleCamera === "function"){
+        window.__toggleCamera();
+        // sync ป้ายปุ่มหลัง toggle (camera state อัพเดทแบบ async นิดนึง)
+        setTimeout(syncGuideCameraButton, 250);
+        setTimeout(syncGuideCameraButton, 700);
+      }
+    };
+    btnStart.addEventListener("click", onStart);
+    btnCamera?.addEventListener("click", onCamera);
+  });
+}
+function syncGuideCameraButton(){
+  const btn = document.getElementById("btnGuideCamera");
+  if (!btn) return;
+  const camOn = !!(window.__game && window.__game.G && window.__game.G.cameraOn);
+  if (camOn){
+    btn.classList.add("cam-on");
+    btn.classList.remove("secondary");
+    btn.setAttribute("title", "ปิดโหมดกล้อง");
+    btn.setAttribute("aria-label", "ปิดโหมดกล้อง");
+  } else {
+    btn.classList.remove("cam-on");
+    btn.classList.add("secondary");
+    btn.setAttribute("title", "เปิดโหมดกล้อง");
+    btn.setAttribute("aria-label", "เปิดโหมดกล้อง");
+  }
+}
+function runCountdown(){
+  return new Promise(resolve=>{
+    let n = 3;
+    UI.countdownNum.textContent = n;
+    UI.countdown.classList.add("show");
+    UI.countdownNum.style.animation = "none";
+    void UI.countdownNum.offsetWidth;
+    UI.countdownNum.style.animation = "";
+    G.countdownTimer = setInterval(()=>{
+      n--;
+      if (n > 0){
+        UI.countdownNum.textContent = n;
+        UI.countdownNum.style.animation = "none";
+        void UI.countdownNum.offsetWidth;
+        UI.countdownNum.style.animation = "";
+      } else {
+        clearInterval(G.countdownTimer); G.countdownTimer = null;
+        UI.countdown.classList.remove("show");
+        resolve();
+      }
+    }, 1000);
+  });
+}
+function realStartGame(){
+  G.running = true; G.paused = false;
+  // นับถอยหลังจบแล้ว → โชว์กระสอบ/นักมวย/ป้าย
+  document.body.classList.remove("game-ended");
+  document.body.classList.remove("pre-game");
+  G.score = 0; G.hits = 0; G.shots = 0;
+  G.hearts = G.maxHearts;
+  G.time = 120;
+  G.round = null; G.roundActive = false; G.resolving = false;
+  G.lastWord = null; G.lastPunch = 0;
+  G.camHands = []; G.camHandOverL=[false,false]; G.camHandOverR=[false,false];
+  G.drag.active = false;
+  document.querySelectorAll(".punch-fx,.floater,.spark").forEach(n=>n.remove());
+  ['L','R'].forEach(sd=>{ const sw=swingOf(sd); if(sw) sw.classList.remove('fly-out','fly-out-left','fade-out','hitshake','hitshake-left','drop-in'); });
+  if(UI.boxerImg) UI.boxerImg.src = "image/boxer1.png";
+  setHUD();
+  // เคลียร์อีโมจิจบเกมที่อาจค้างจากรอบที่แล้ว
+  clearEmojiRain();
+  // bg ของด่านถูก apply ใน startSequence แล้ว (ตอนกดเลือกด่าน) — ที่นี่แค่กันกรณีเข้ามาจาก Play Again
+  if (!G.selectedBgN) applyRandomGameBackground();
+  hideOverlay(UI.menu); hideOverlay(UI.end); hideOverlay(UI.pause);
+  if (UI.guide) hideOverlay(UI.guide);
+  fitCanvas();
+  requestAnimationFrame(()=>{ fitCanvas(); });
+  nextRound();
+  G.prevT = performance.now();
+  if(!G.rafId) G.rafId = requestAnimationFrame(loop);
+  startTimer();
+  // เปิด BGM ต่อเนื่อง (ถ้าหยุดอยู่ เช่นเพิ่ง resume จาก pause)
+  const bgmEl = document.getElementById("bgm");
+  if (bgmEl && bgmEl.paused) AudioMgr.play("bgm");
+  // คำอธิบายการยิงธนู: แสดงแค่เกมแรกของเซสชั่น 5 วิ แล้วไม่แสดงอีกเลย
+  if (!G.hintEverShown){
+    G.hintEverShown = true;
+    UI.hint.classList.add("show");
+    setTimeout(()=>UI.hint.classList.remove("show"), 5000);
+  } else {
+    UI.hint.classList.remove("show");
+  }
+}
+function pauseGame(){
+  if(!G.running) return;
+  G.paused = true;
+  G._pauseAt = performance.now();
+  G.drag.active = false;
+  showOverlay(UI.pause);
+  document.body.classList.remove("zone-warn");
+  const bgm = document.getElementById("bgm"); if (bgm) bgm.pause();
+}
+function resumeGame(){
+  const now = performance.now();
+  // เลื่อนเวลาเริ่มรอบไปข้างหน้าเท่ากับเวลาที่หยุดไป (หลอดเวลาไม่กระโดด)
+  if(G.paused && G.roundActive){ G.roundStart += (now - (G._pauseAt||now)); }
+  G.paused = false;
+  G.drag.active = false;
+  hideOverlay(UI.pause);
+  G.prevT = now;
+  // resume bgm
+  const bgmEl = document.getElementById("bgm");
+  if (bgmEl && bgmEl.paused) AudioMgr.play("bgm");
+}
+function endGame(reason){
+  if (!G.running) return;     // กันเรียกซ้ำ
+  G.running = false; G.paused = false;
+  clearInterval(G.timerId);
+  cancelAnimationFrame(G.rafId); G.rafId = null;
+  document.body.classList.remove("zone-warn");
+  G.roundActive = false; G.resolving = true;
+  document.querySelectorAll(".floater, .spark, .punch-fx").forEach(n=>n.remove());
+  try{ ctx.clearRect(0,0,UI.canvas.width, UI.canvas.height); }catch(_){}
+  document.body.classList.add("game-ended");
+  G.drag.active = false;
+  // หยุด BGM ตอนจบเกม เพื่อให้เสียงสรุปคะแนน (sfxWin) ได้ยินชัดเจน
+  // จะถูก resume อัตโนมัติใน realStartGame() เมื่อเริ่มเกมใหม่
+  AudioMgr.stop("bgm");
+  AudioMgr.play("sfxWin");        // win2.mp3
+  UI.endScore.textContent = G.score;
+  UI.endHits.textContent  = G.hits;
+  const acc = G.shots ? Math.round((G.hits/G.shots)*100) : 0;
+  UI.endAcc.textContent = acc + "%";
+
+  let title;
+  let emojiSet;        // ชุดอีโมจิที่จะโปรย ขึ้นกับคะแนน
+  let emojiCount;      // จำนวนชิ้นที่จะโปรย
+  if (reason === "nohearts"){
+    title = "หัวใจหมดแล้ว! 💔";
+    emojiSet = ["💔","😢","🩹","💧"];
+    emojiCount = 18;
+  } else {
+    // จบเพราะหมดเวลา — ตัดสินจากคะแนน
+    if(G.score >= 150){
+      title = "ยอดเยี่ยม! 🎯";
+      emojiSet = ["🎯","🏆","🎉","✨","⭐","🥇","🎊","🌟"];
+      emojiCount = 60;
+    } else if(G.score >= 80){
+      title = "ทำได้ดี! ⭐";
+      emojiSet = ["⭐","🎉","✨","👏","🎊","💫"];
+      emojiCount = 40;
+    } else if(G.score >= 40){
+      title = "พยายามอีกนิด!";
+      emojiSet = ["💪","👍","✨","🌱"];
+      emojiCount = 24;
+    } else {
+      title = "สู้ๆ ลองอีกครั้ง!";
+      emojiSet = ["💪","🌟","😊"];
+      emojiCount = 16;
+    }
+  }
+  UI.endTitle.textContent = title;
+  showOverlay(UI.end);
+  // โปรยอีโมจิทั่วจอ
+  rainEmojis(emojiSet, emojiCount);
+}
+
+/* โปรยอีโมจิทั่วหน้าจอ — ตกจากบน ลอยลงพร้อมหมุน */
+function rainEmojis(symbols, count){
+  // เคลียร์ของเก่า ถ้ามีค้าง
+  document.querySelectorAll(".end-emoji").forEach(n=>n.remove());
+  for (let i=0; i<count; i++){
+    const el = document.createElement("div");
+    el.className = "end-emoji";
+    el.textContent = symbols[Math.floor(Math.random()*symbols.length)];
+    const left = Math.random()*100;                  // 0-100%
+    const size = 22 + Math.random()*30;              // 22-52px
+    const dur  = 2.4 + Math.random()*2.4;            // 2.4-4.8s
+    const delay = Math.random()*1.6;                 // 0-1.6s
+    const drift = (Math.random()-0.5)*80;            // เลื่อนซ้าย/ขวา ±40px
+    const rot   = (Math.random()*720 - 360) + "deg"; // หมุน ±360°
+    el.style.left = left + "vw";
+    el.style.fontSize = size + "px";
+    el.style.setProperty("--drift", drift + "px");
+    el.style.setProperty("--rot", rot);
+    el.style.animationDuration = dur + "s";
+    el.style.animationDelay    = delay + "s";
+    document.body.appendChild(el);
+    // ลบทิ้งหลังตกเสร็จ (กันค้างในหน้าจอ)
+    setTimeout(()=>el.remove(), (dur + delay) * 1000 + 200);
+  }
+}
+function clearEmojiRain(){
+  document.querySelectorAll(".end-emoji").forEach(n=>n.remove());
+}
+
+function restartCleanupKeepCamera(){
+  G.running = false;
+  G.paused = false;
+  G.startBusy = false;
+  G.drag.active = false;
+  G.roundActive = false;
+
+  clearInterval(G.timerId);
+  G.timerId = null;
+
+  clearInterval(G.countdownTimer);
+  G.countdownTimer = null;
+
+  cancelAnimationFrame(G.rafId);
+  G.rafId = null;
+
+  document.querySelectorAll(".floater, .spark, .punch-fx").forEach(n=>n.remove());
+
+  ctx.clearRect(0, 0, UI.canvas.width, UI.canvas.height);
+
+  // ไม่หยุด BGM — เล่นต่อเนื่อง
+
+  hideOverlay(UI.pause);
+  hideOverlay(UI.end);
+  hideOverlay(UI.preload);
+  hideOverlay(UI.countdown);
+
+  // สำคัญ: ไม่เรียก window.__stopCamera()
+  // เพื่อให้กดเริ่มเกมใหม่แล้วกล้องยังเปิดอยู่
+}
+
+/* ---------- 14. HARD CLEANUP ---------- */
+function hardCleanup(){
+  G.running = false; G.paused = false; G.startBusy = false;
+  G.drag.active = false; G.roundActive = false;
+  clearInterval(G.timerId); G.timerId = null;
+  clearInterval(G.countdownTimer); G.countdownTimer = null;
+  cancelAnimationFrame(G.rafId); G.rafId = null;
+  document.querySelectorAll(".floater, .spark, .punch-fx").forEach(n=>n.remove());
+  clearEmojiRain();
+  ctx.clearRect(0,0,UI.canvas.width, UI.canvas.height);
+  hideOverlay(UI.pause); hideOverlay(UI.end); hideOverlay(UI.preload); hideOverlay(UI.countdown);
+  if (UI.guide) hideOverlay(UI.guide);
+  document.body.classList.remove("zone-warn");
+  document.body.classList.remove("game-ended");
+  document.body.classList.add("pre-game");   // ซ่อนกระสอบ/นักมวย/ป้าย จนกว่าจะเริ่มเกมรอบใหม่
+  // เคลียร์พื้นหลังเกม → กลับไปใช้ bg.png ของหน้าเมนู
+  clearGameBackground();
+  G.selectedBgN = null;          // รีเซ็ตเพื่อให้สุ่มใหม่ตอนเข้าด่านครั้งต่อไป
+  // กล้องไม่ปิดอัตโนมัติ — ค้างไว้ตามที่ผู้เล่นเปิดไว้
+}
+function backToMenu(){
+  hardCleanup();
+  showOverlay(UI.menu);
+  // resume BGM ที่ถูกหยุดตอน endGame — ให้เพลงพื้นหลังกลับมาที่หน้าเมนู
+  const bgmEl = document.getElementById("bgm");
+  if (bgmEl && bgmEl.paused && !AudioMgr.isMuted()) AudioMgr.play("bgm");
+}
+
+/* ---------- 15. TOPIC LIST ---------- */
+function renderTopics(){
+  UI.topicList.innerHTML = "";
+  Object.entries(TOPICS).forEach(([key, t])=>{
+    const b = document.createElement("button");
+    b.className = "topic" + (key===G.topicKey ? " active" : "");
+    b.innerHTML = `
+      <div class="emoji">${t.emoji}</div>
+      <div style="flex:1; min-width:0;">
+        <div class="t-title">${t.title}</div>
+      </div>`;
+    // กดที่ด่าน → ตั้ง topic + เริ่มเกมทันที (ไม่ต้องกดปุ่ม "เริ่มเล่น" อีก)
+    b.onclick = ()=>{
+      G.topicKey = key;
+      AudioMgr.play("sfxSelect");
+      startSequence();
+    };
+    UI.topicList.appendChild(b);
+  });
+}
+
+/* ---------- 16. MUTE / FULLSCREEN ---------- */
+function setupMute(){
+  AudioMgr.setMuted(false);
+  const slider = document.getElementById("volSlider");
+  const volContainer = document.getElementById("volControl");
+  const btnVolMute = document.getElementById("btnVolMute");
+  // โหลด volume จาก localStorage
+  let savedVol = 0.6;
+  try{
+    const v = localStorage.getItem("bowGameVol");
+    if (v !== null) savedVol = Math.max(0, Math.min(1, parseFloat(v)));
+  }catch(_){}
+  AudioMgr.setVolume(savedVol);
+  function applyMutedClass(){
+    volContainer?.classList.toggle("muted", AudioMgr.isMuted());
+    UI.btnMute.setAttribute("aria-pressed", String(AudioMgr.isMuted()));
+  }
+  if (slider){
+    slider.value = Math.round(savedVol * 100);
+    slider.style.setProperty("--vol-fill", (savedVol * 100) + "%");
+    slider.addEventListener("input", ()=>{
+      const v = parseInt(slider.value, 10) / 100;
+      AudioMgr.setVolume(v);
+      slider.style.setProperty("--vol-fill", (v * 100) + "%");
+      // ลากจน > 0 ขณะ mute → unmute อัตโนมัติ
+      if (v > 0 && AudioMgr.isMuted()){
+        AudioMgr.setMuted(false);
+        applyMutedClass();
+      }
+      try{ localStorage.setItem("bowGameVol", String(v)); }catch(_){}
+    });
+  }
+  // ปุ่มหลัก: toggle popup (ไม่ mute ทันที — ต้องกดปุ่มเล็กใน popup)
+  UI.btnMute.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    const open = !volContainer.classList.contains("open");
+    volContainer.classList.toggle("open", open);
+    UI.btnMute.setAttribute("aria-expanded", String(open));
+  });
+  // ปุ่มเล็กใน popup: mute/unmute
+  btnVolMute?.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    AudioMgr.setMuted(!AudioMgr.isMuted());
+    applyMutedClass();
+  });
+  // คลิกที่อื่น → ปิด popup
+  document.addEventListener("click", (e)=>{
+    if (!volContainer.contains(e.target)){
+      volContainer.classList.remove("open");
+      UI.btnMute.setAttribute("aria-expanded", "false");
+    }
+  });
+  // กัน popup ดูดคลิกบน slider เอง
+  document.getElementById("volPopup")?.addEventListener("click", (e)=>e.stopPropagation());
+}
+function setupFullscreen(){
+  const fsEnabled = ()=> document.fullscreenEnabled || document.webkitFullscreenEnabled;
+  const isFull   = ()=> document.fullscreenElement || document.webkitFullscreenElement;
+  if (!fsEnabled()){ UI.btnFs.style.display = "none"; return; }
+  UI.btnFs.addEventListener("click", ()=>{
+    if (isFull()){ (document.exitFullscreen||document.webkitExitFullscreen)?.call(document); }
+    else { const el = document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el); }
+  });
+  const render = ()=>{
+    const on = !!isFull();
+    UI.btnFs.classList.toggle("on", on);
+    UI.btnFs.setAttribute("aria-pressed", String(on));
+  };
+  document.addEventListener("fullscreenchange", render);
+  document.addEventListener("webkitfullscreenchange", render);
+}
+
+/* ---------- 17. BOOT ---------- */
+function boot(){
+  renderTopics();
+  fitCanvas();
+
+  // ล็อก scroll ถาวร (ทั้งเกมเป็นแบบ no-scroll)
+  document.body.classList.add("no-scroll");
+
+  // ── Splash blur จนกว่ารูปสำคัญจะโหลดเสร็จ ──
+  // ใส่ class "loading" → blur ทั้ง splash (bg.png + banner ยังไม่พร้อม)
+  // พอ bg.png โหลดเสร็จ → ใส่ class "bg-ready" (แสดงพื้นหลังเบลอ)
+  // พอ banner.png โหลดเสร็จ → ถอด "loading" (fade เลิกเบลอ แสดง wrap)
+  const splashEl = document.getElementById("splashOverlay");
+  if (splashEl){
+    splashEl.classList.add("loading");
+    const bgImg = new Image();
+    bgImg.onload = bgImg.onerror = ()=> splashEl.classList.add("bg-ready");
+    bgImg.src = "image/bg.png";
+
+    const bannerEl = splashEl.querySelector(".splash-banner");
+    const finishLoading = ()=>{
+      // ถ้า bg ยังไม่ ready (โหลดช้ามาก) ก็ใส่ให้ครบก่อน
+      splashEl.classList.add("bg-ready");
+      // delay 1 frame เพื่อให้ CSS transition รับรู้ state ก่อนถอด
+      requestAnimationFrame(()=> splashEl.classList.remove("loading"));
+    };
+    if (bannerEl){
+      if (bannerEl.complete && bannerEl.naturalWidth > 0){
+        finishLoading();
+      } else {
+        bannerEl.addEventListener("load", finishLoading, {once:true});
+        bannerEl.addEventListener("error", finishLoading, {once:true});
+      }
+    } else {
+      finishLoading();
+    }
+    // กันค้าง — หลัง 4 วินาที ยังไง ๆ ก็ปลดเบลอ
+    setTimeout(finishLoading, 4000);
+  }
+
+  // ── Splash → Menu ──
+  const splash = document.getElementById("splashOverlay");
+  const btnEnter = document.getElementById("btnEnterGame");
+  if (btnEnter){
+    btnEnter.addEventListener("click", ()=>{
+      try{
+        AudioMgr.attachSrc();
+        AudioMgr.play("sfxSelect");
+        // เริ่มเล่นเพลงพื้นหลัง (bgm.mp3) — user gesture แล้ว autoplay ได้
+        AudioMgr.play("bgm");
+      }catch(_){}
+      if (splash) splash.classList.remove("show");
+      showOverlay(UI.menu);
+    }, { once:false });
+  }
+
+  [['L',UI.sandbagSwingL],['R',UI.sandbagSwingR]].forEach(([sd,el])=>{
+    if(!el) return;
+    el.addEventListener("mousedown", (e)=>onSandbagPointer(sd,e));
+    el.addEventListener("touchstart", (e)=>onSandbagPointer(sd,e), {passive:false});
+  });
+  UI.field.addEventListener("contextmenu", e=>e.preventDefault());
+
+  $("#btnPause").onclick      = ()=> G.paused ? resumeGame() : pauseGame();
+  $("#btnHome").onclick       = backToMenu;
+  $("#btnResume").onclick     = resumeGame;
+  $("#btnRestartPause").onclick = ()=>{ restartCleanupKeepCamera(); startSequence(); };
+  $("#btnMenuPause").onclick  = backToMenu;
+  $("#btnPlayAgain").onclick  = ()=>{ restartCleanupKeepCamera(); startSequence(); };
+  $("#btnMenuEnd").onclick    = backToMenu;
+  $("#btnHow").onclick = ()=>{
+    const wrap = $("#howBoxWrap"); if (wrap) wrap.style.display = "flex";
+    const banner = document.querySelector("#menuOverlay .menu-banner");
+    if (banner) banner.style.visibility = "hidden";
+  };
+  $("#btnHowClose")?.addEventListener("click", ()=>{
+    const wrap = $("#howBoxWrap"); if (wrap) wrap.style.display = "none";
+    const banner = document.querySelector("#menuOverlay .menu-banner");
+    if (banner) banner.style.visibility = "";
+  });
+
+  setupMute();
+  setupFullscreen();
+
+  window.addEventListener("keydown", (e)=>{
+    if(e.code === "Space" && G.running){ e.preventDefault(); G.paused ? resumeGame() : pauseGame(); }
+    if(e.code === "Escape"){ backToMenu(); }
+  });
+
+  let wasRunning = false;
+  document.addEventListener("visibilitychange", ()=>{
+    if (document.hidden){
+      wasRunning = G.running && !G.paused;
+      if (wasRunning) pauseGame();
+    } else {
+      wasRunning = false;
+    }
+  });
+
+}
+// expose state ให้ external script เข้าถึง (เช่น pose script)
+window.__game = { G };
+boot();
+</script>
+
+<!-- ========= POSE / CAMERA AIM (MediaPipe Pose Landmarker) ========= -->
+<script type="module">
+/* โหลด MediaPipe แบบ try/catch — ถ้าโหลดไม่ได้ ปุ่มกล้องจะถูก disable
+ * แต่เกมโหมดเมาส์/ทัชต้องเล่นได้ปกติ                                  */
+let PoseLandmarker, FilesetResolver;
+try{
+  const mod = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3");
+  PoseLandmarker = mod.PoseLandmarker;
+  FilesetResolver = mod.FilesetResolver;
+}catch(err){
+  console.warn("[pose] MediaPipe load failed — camera mode disabled:", err);
+  const btn = document.getElementById("btnCam");
+  if (btn){
+    btn.disabled = true;
+    btn.title = "กล้องไม่พร้อมใช้งาน (โหลดโมเดลไม่สำเร็จ)";
+    btn.style.opacity = ".5";
+  }
+}
+
+const video   = document.getElementById("cameraMirror");
+const camCvs  = document.getElementById("camCanvas");
+const camCtx  = camCvs.getContext("2d", { alpha:true });
+const camBtn  = document.getElementById("btnCam");
+
+const DETECT_W = 320;
+const detectCanvas = document.createElement("canvas");
+const detectCtx    = detectCanvas.getContext("2d", { alpha:false });
+
+let landmarker = null;
+let stream = null;
+let CAM_ON = false;
+let raf = 0;
+let starting = false;          // กันกดเปิดซ้ำระหว่างกำลังเปิด
+
+function fitCamCanvas(){
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  camCvs.width  = Math.round(innerWidth  * dpr);
+  camCvs.height = Math.round(innerHeight * dpr);
+  camCvs.style.width  = innerWidth  + "px";
+  camCvs.style.height = innerHeight + "px";
+  camCtx.setTransform(1,0,0,1,0,0);
+  camCtx.scale(dpr,dpr);
+}
+fitCamCanvas();
+window.addEventListener("resize", fitCamCanvas);
+
+async function ensureLandmarker(){
+  if (!PoseLandmarker || !FilesetResolver) throw new Error("MediaPipe not loaded");
+  if (landmarker) return landmarker;
+  const fileset = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+  );
+  landmarker = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+    },
+    runningMode:"VIDEO", numPoses:1,
+    minPoseDetectionConfidence:.35,
+    minPosePresenceConfidence:.35,
+    minTrackingConfidence:.35
+  });
+  return landmarker;
+}
+
+function coverCropRect(){
+  const vw = video.videoWidth || 640;
+  const vh = video.videoHeight || 480;
+  const sw = innerWidth, sh = innerHeight;
+  const scale = Math.max(sw/vw, sh/vh);
+  const sW = Math.round(sw/scale), sH = Math.round(sh/scale);
+  const sX = Math.round((vw - sW)/2), sY = Math.round((vh - sH)/2);
+  return { sX, sY, sW, sH, vw, vh, sw, sh };
+}
+
+/* normalized landmark → พิกัด pixel ใน viewport (mirror x ตาม video scaleX(-1)) */
+function landmarkToScreen(lm){
+  const { sX, sY, sW, sH, vw, vh, sw, sh } = coverCropRect();
+  const px = lm.x * vw, py = lm.y * vh;
+  const u = (px - sX) / sW, v = (py - sY) / sH;
+  let x = u * sw, y = v * sh;
+  x = sw - x;                                // mirror
+  return { x, y };
+}
+
+/* ============================================================
+ *  Boxing pose machine (โหมดกล้อง)
+ *  ─────────────────────────────────────────────────────────
+ *  ติดตามข้อมือซ้าย/ขวา → ส่งตำแหน่งในจอ (px) ให้เกมผ่าน __poseHands
+ *  เกมจะเช็คเองว่ามือทับกระสอบทรายไหม = ลงหมัด (แค่สัมผัส)
+ *  วาดถุงมือ (วงกลมแดง) ทับตำแหน่งมือจริงเพื่อให้ผู้เล่นเล็งง่าย
+ * ========================================================== */
+const HAND_THROTTLE_MS = 30;
+let lastHandSent = 0;
+
+function sendNoHands(){
+  if (typeof window.__poseHands === "function") window.__poseHands([]);
+}
+
+function processPose(res){
+  const sw = innerWidth, sh = innerHeight;
+  camCtx.clearRect(0, 0, sw, sh);
+  if (!res?.landmarks?.length){ sendNoHands(); return; }
+  const lm = res.landmarks[0];
+  const LW = lm[15], RW = lm[16];
+  const LS = lm[11], RS = lm[12];
+  if (!LW || !RW){ sendNoHands(); return; }
+
+  // ขนาดถุงมือ — อิงความกว้างไหล่ ถ้ามี
+  let glove = 34;
+  if (LS && RS){
+    const lsPx = landmarkToScreen(LS), rsPx = landmarkToScreen(RS);
+    const shW = Math.hypot(lsPx.x-rsPx.x, lsPx.y-rsPx.y);
+    glove = Math.max(24, Math.min(70, shW*0.28));
+  }
+
+  // จุดติดตาม = กลางฝ่ามือ (เฉลี่ย ข้อมือ+โคนนิ้วชี้+โคนนิ้วก้อย+โคนนิ้วโป้ง) ใช้ได้ทั้งแบมือ/กำมือ
+  const hands = [];
+  const lp = palmCenter(lm, [15,19,17,21]);
+  const rp = palmCenter(lm, [16,20,18,22]);
+  if (lp && (LW.visibility===undefined || LW.visibility>0.3)) hands.push(lp);
+  if (rp && (RW.visibility===undefined || RW.visibility>0.3)) hands.push(rp);
+
+  const now = performance.now();
+  if (now - lastHandSent >= HAND_THROTTLE_MS){
+    lastHandSent = now;
+    if (typeof window.__poseHands === "function") window.__poseHands(hands);
+  }
+  // ไม่วาดลูกกลมแดงที่มือแล้ว (ตามที่ขอ)
+}
+
+/* กลางฝ่ามือ = เฉลี่ยพิกัดจอของ landmark ที่ระบุ (กรองตาม visibility) */
+function palmCenter(lm, ids){
+  let sx=0, sy=0, n=0;
+  for (const i of ids){
+    const p = lm[i];
+    if (p && (p.visibility===undefined || p.visibility>0.2)){
+      const s = landmarkToScreen(p); sx+=s.x; sy+=s.y; n++;
+    }
+  }
+  if (!n) return null;
+  return { x: sx/n, y: sy/n };
+}
+
+/* วาดถุงมือนวมแดงทับตำแหน่งมือจริง */
+function drawGloves(hands, r){
+  for (const h of hands){
+    camCtx.save();
+    camCtx.beginPath();
+    camCtx.arc(h.x, h.y, r, 0, Math.PI*2);
+    camCtx.fillStyle = "rgba(226,106,79,.85)";
+    camCtx.fill();
+    camCtx.lineWidth = 3;
+    camCtx.strokeStyle = "rgba(184,81,60,.95)";
+    camCtx.stroke();
+    // ไฮไลต์
+    camCtx.beginPath();
+    camCtx.arc(h.x - r*0.3, h.y - r*0.3, r*0.28, 0, Math.PI*2);
+    camCtx.fillStyle = "rgba(255,255,255,.35)";
+    camCtx.fill();
+    camCtx.restore();
+  }
+}
+
+function runLoop(){
+  const step = ()=>{
+    if (!CAM_ON){ raf = 0; return; }
+    if (!video.videoWidth){ raf = requestAnimationFrame(step); return; }
+    try{
+      const { sX, sY, sW, sH } = coverCropRect();
+      const ratio = (video.videoWidth||640) / (video.videoHeight||480);
+      detectCanvas.width  = DETECT_W;
+      detectCanvas.height = Math.round(DETECT_W / ratio);
+      detectCtx.drawImage(video, sX, sY, sW, sH, 0, 0, detectCanvas.width, detectCanvas.height);
+      const res = landmarker.detectForVideo(detectCanvas, performance.now());
+      processPose(res);
+    }catch(e){ /* swallow per-frame errors เพื่อไม่ให้ loop ตาย */ }
+    raf = requestAnimationFrame(step);
+  };
+  raf = requestAnimationFrame(step);
+}
+
+async function startCamera(){
+  if (starting || CAM_ON) return;
+  if (!PoseLandmarker){
+    if (camBtn){
+      camBtn.title = "กล้องไม่พร้อมใช้งาน";
+      camBtn.disabled = true;
+    }
+    return;
+  }
+  starting = true;
+  try{
+    if (camBtn) camBtn.disabled = true;
+    await ensureLandmarker();
+    // ถ้ามี stream เดิมที่ยังใช้งานได้ — reuse ไม่ขอ permission ใหม่
+    let needNewStream = true;
+    if (stream){
+      const tracks = stream.getVideoTracks();
+      if (tracks.length > 0 && tracks[0].readyState === "live"){
+        needNewStream = false;
+      } else {
+        try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){}
+        stream = null;
+      }
+    }
+    if (needNewStream){
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{ width:960, height:540, frameRate:30, facingMode:"user" },
+        audio:false
+      });
+    }
+    video.srcObject = stream;
+    await video.play().catch(()=>{});
+    video.style.display = "block";
+    camCvs.style.display = "block";
+    document.body.classList.add("cam-on");
+    if (camBtn){
+      camBtn.classList.add("on");
+      camBtn.setAttribute("aria-pressed","true");
+      camBtn.title = "ปิดกล้อง";
+    }
+    CAM_ON = true;
+    // sync ไปยัง game state เพื่อให้ bubble positioning รู้ว่าอยู่โหมดกล้อง
+    if (window.__game && window.__game.G) window.__game.G.cameraOn = true;
+    fitCamCanvas();
+    if (!raf) runLoop();
+  }catch(err){
+    console.warn("[camera] start failed:", err);
+    // revert state
+    try{ if (stream){ stream.getTracks().forEach(t=>t.stop()); } }catch(_){}
+    stream = null;
+    CAM_ON = false;
+    video.style.display = "none";
+    camCvs.style.display = "none";
+    document.body.classList.remove("cam-on");
+    if (camBtn){
+      camBtn.classList.remove("on");
+      camBtn.setAttribute("aria-pressed","false");
+      camBtn.title = err?.name === "NotAllowedError"
+        ? "กล้องไม่ได้รับอนุญาต"
+        : "เปิดกล้องไม่สำเร็จ";
+    }
+    if (typeof window.__poseHands === "function") window.__poseHands([]);
+  }finally{
+    if (camBtn) camBtn.disabled = false;
+    starting = false;
+  }
+}
+
+function stopCamera(){
+  CAM_ON = false;
+  if (raf){ cancelAnimationFrame(raf); raf = 0; }
+  // ไม่ stop tracks — เก็บ stream ไว้ใช้ครั้งต่อไป (ไม่ต้องขอ permission ซ้ำ)
+  // แค่ pause + ถอด srcObject ออกจาก video
+  try{ video.pause(); }catch(_){}
+  try{ video.srcObject = null; }catch(_){}
+  video.removeAttribute("srcObject");
+  video.style.display = "none";
+  camCvs.style.display = "none";
+  camCtx.clearRect(0, 0, innerWidth, innerHeight);
+  document.body.classList.remove("cam-on");
+  if (camBtn){
+    camBtn.classList.remove("on");
+    camBtn.setAttribute("aria-pressed","false");
+    camBtn.title = "เปิดกล้องเล็งด้วยมือ";
+  }
+  // ปลดมือชก + เคลียร์ state ฝั่งเกม
+  if (typeof window.__poseHands === "function") window.__poseHands([]);
+  if (window.__game && window.__game.G){
+    window.__game.G.camHands = [];
+    window.__game.G.camHandOverL = [false,false];
+    window.__game.G.camHandOverR = [false,false];
+    window.__game.G.cameraOn = false;
+  }
+}
+
+if (camBtn){
+  camBtn.addEventListener("click", ()=>{
+    if (camBtn.disabled) return;
+    if (!CAM_ON && !stream) startCamera();
+    else stopCamera();
+  });
+}
+window.__toggleCamera = ()=> camBtn && camBtn.click();
+window.__stopCamera   = stopCamera;                    // exposed (สำหรับเรียกเองในอนาคต)
+// ปิด stream + ปล่อยกล้อง เมื่อปิดหน้าเว็บ
+window.addEventListener("pagehide", ()=>{
+  try{ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; } }catch(_){}
+});
+// กล้องไม่ปิดอัตโนมัติแม้สลับ tab/แอป — ปิดเฉพาะเมื่อผู้เล่นกดปุ่มปิดเอง หรือปิดหน้าเว็บ
+</script>
+
+</body>
+</html>
